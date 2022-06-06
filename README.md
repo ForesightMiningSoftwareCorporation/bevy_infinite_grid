@@ -45,7 +45,7 @@ commands.spawn_bundle(InfiniteGridBundle::new(
 ));
 ```
 
-See the [minimal](examples/minimal.rs) demo for an example of a minimal implementation.
+See the [simple](examples/simple.rs) demo for an example of a minimal implementation.
 
 # License
 
