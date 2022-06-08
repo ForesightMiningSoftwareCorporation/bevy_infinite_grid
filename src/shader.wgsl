@@ -139,9 +139,10 @@ fn grid(plane_coords: vec2<f32>, scale: f32) -> vec4<f32> {
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
-    let minimumz = min(derivative.y, 1.);
-    let minimumx = min(derivative.x, 1.);
+    let minimumz = min(derivative.y, 1.) / scale;
+    let minimumx = min(derivative.x, 1.) / scale;
     var color = vec4<f32>(0.2, 0.2, 0.2, 1.0 - min(line, 1.0));
+
     // z axis
     if (plane_coords.x > -0.5 * minimumx && plane_coords.x < 0.5 * minimumx) {
         color = vec4<f32>(material.z_axis_col, color.a);
