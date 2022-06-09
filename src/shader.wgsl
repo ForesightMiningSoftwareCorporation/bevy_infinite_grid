@@ -134,23 +134,25 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     return out;
 }
 
-fn grid(plane_coords: vec2<f32>, scale: f32) -> vec4<f32> {
+fn grid(real_coords: vec3<f32>, plane_coords: vec2<f32>, scale: f32, shadow: f32, real_depth: f32) -> vec4<f32> {
     let coord = plane_coords * scale; // use the scale variable to set the distance between the lines
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
     let minimumz = min(derivative.y, 1.) / scale;
     let minimumx = min(derivative.x, 1.) / scale;
-    var color = vec4<f32>(0.2, 0.2, 0.2, 1.0 - min(line, 1.0));
-
-    // z axis
-    if (plane_coords.x > -0.5 * minimumx && plane_coords.x < 0.5 * minimumx) {
-        color = vec4<f32>(material.z_axis_col, color.a);
-    }
-    // x axis
-    if (plane_coords.y > -0.5 * minimumz && plane_coords.y < 0.5 * minimumz) {
-        color = vec4<f32>(material.x_axis_col, color.a);
-    }
+    let base_alpha = max(1.0 - min(line, 1.0), 0.7 * (1. - shadow));
+    let dist_fadeout = min(1., 1. - material.scale * real_depth / 100.);
+    let dot_fadeout = abs(dot(material.normal, normalize(view.world_position - real_coords)));
+    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout);
+    var color = vec4<f32>(
+        vec3<f32>(min(shadow, 0.2)),
+        base_alpha * alpha_fadeout
+    );
+    let z_axis_cond = plane_coords.x > -0.5 * minimumx && plane_coords.x < 0.5 * minimumx;
+    let x_axis_cond = plane_coords.y > -0.5 * minimumz && plane_coords.y < 0.5 * minimumz;
+    color = mix(color, vec4<f32>(material.z_axis_col, color.a), f32(z_axis_cond));
+    color = mix(color, vec4<f32>(material.x_axis_col, color.a), f32(x_axis_cond));
     return color;
 }
 
@@ -163,6 +165,40 @@ struct FragmentOutput {
     [[location(0)]] color: vec4<f32>;
     [[builtin(frag_depth)]] depth: f32;
 };
+
+fn fetch_directional_shadow(light_id: u32, frag_position: vec4<f32>, surface_normal: vec3<f32>) -> f32 {
+    let light = lights.directional_lights[light_id];
+
+    // The normal bias is scaled to the texel size.
+    let normal_offset = light.shadow_normal_bias * surface_normal.xyz;
+    let depth_offset = light.shadow_depth_bias * light.direction_to_light.xyz;
+    let offset_position = vec4<f32>(frag_position.xyz + normal_offset + depth_offset, frag_position.w);
+
+    let offset_position_clip = light.view_projection * offset_position;
+    if (offset_position_clip.w <= 0.0) {
+        return 1.0;
+    }
+    let offset_position_ndc = offset_position_clip.xyz / offset_position_clip.w;
+    // No shadow outside the orthographic projection volume
+    if (any(offset_position_ndc.xy < vec2<f32>(-1.0)) || offset_position_ndc.z < 0.0 || any(offset_position_ndc > vec3<f32>(1.0))) {
+        return 1.0;
+    }
+
+    // compute texture coordinates for shadow lookup, compensating for the Y-flip difference
+    // between the NDC and texture coordinates
+    let flip_correction = vec2<f32>(0.5, -0.5);
+    let light_local = offset_position_ndc.xy * flip_correction + vec2<f32>(0.5, 0.5);
+
+    let depth = offset_position_ndc.z;
+    // do the lookup, using HW PCF and comparison
+    // NOTE: Due to non-uniform control flow above, we must use the level variant of the texture
+    // sampler to avoid use of implicit derivatives causing possible undefined behavior.
+#ifdef NO_ARRAY_TEXTURES_SUPPORT
+    return textureSampleCompareLevel(directional_shadow_textures, directional_shadow_textures_sampler, light_local, depth);
+#else
+    return textureSampleCompareLevel(directional_shadow_textures, directional_shadow_textures_sampler, light_local, i32(light_id), depth);
+#endif
+}
 
 [[stage(fragment)]]
 fn fragment(in: VertexOutput) -> FragmentOutput {
@@ -180,8 +216,18 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let rotation_matrix = material.planar_rotation_matrix;
     let plane_coords = (rotation_matrix * planar_offset).xz;
 
+
+    let view_space_pos = view.inverse_view * vec4<f32>(frag_pos_3d, 1.);
+    let clip_space_pos = view.projection * view_space_pos;
+    let clip_depth = clip_space_pos.z / clip_space_pos.w;
+    let real_depth = -view_space_pos.z;
+
     var out: FragmentOutput;
-    out.color = grid(plane_coords, material.scale) * f32(t > 0.);
-    out.depth = compute_depth(frag_pos_3d);
+
+    out.depth = clip_depth;
+
+    let shadow = floor(fetch_directional_shadow(0u, vec4<f32>(frag_pos_3d, 1.), plane_normal));
+    out.color = grid(frag_pos_3d, plane_coords, material.scale, shadow, real_depth);
+
     return out;
 }
