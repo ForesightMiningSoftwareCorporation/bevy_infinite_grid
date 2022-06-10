@@ -1,6 +1,6 @@
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    pbr::MaterialPipeline,
+    pbr::{MaterialPipeline, NotShadowCaster},
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -49,6 +49,7 @@ pub struct InfiniteGridMaterial {
     pub rot_matrix: Mat3,
     pub x_axis_color: Color,
     pub z_axis_color: Color,
+    pub shadow_color: Color,
 }
 
 impl Default for InfiniteGridMaterial {
@@ -60,6 +61,7 @@ impl Default for InfiniteGridMaterial {
             rot_matrix: Mat3::IDENTITY,
             x_axis_color: Color::rgb(1.0, 0.2, 0.2),
             z_axis_color: Color::rgb(0.2, 0.2, 1.0),
+            shadow_color: Color::rgba(0.2, 0.2, 0.2, 0.7),
         }
     }
 }
@@ -73,6 +75,7 @@ pub struct InfiniteGridGpuData {
 
     x_axis_color: Vec3,
     z_axis_color: Vec3,
+    shadow_color: Vec4,
 }
 
 impl From<InfiniteGridMaterial> for InfiniteGridGpuData {
@@ -84,6 +87,7 @@ impl From<InfiniteGridMaterial> for InfiniteGridGpuData {
             scale: val.scale,
             x_axis_color: Vec3::from_slice(&val.x_axis_color.as_rgba_f32()),
             z_axis_color: Vec3::from_slice(&val.z_axis_color.as_rgba_f32()),
+            shadow_color: Vec4::from_slice(&val.shadow_color.as_rgba_f32()),
         }
     }
 }
@@ -168,6 +172,7 @@ pub struct InfiniteGridBundle {
     #[bundle]
     material_mesh_bundle: MaterialMeshBundle<InfiniteGridMaterial>,
     no_frustum_culling: NoFrustumCulling,
+    not_shadow_caster: NotShadowCaster,
 }
 
 impl InfiniteGridBundle {
@@ -179,6 +184,7 @@ impl InfiniteGridBundle {
                 ..Default::default()
             },
             no_frustum_culling: NoFrustumCulling,
+            not_shadow_caster: NotShadowCaster,
         }
     }
 }

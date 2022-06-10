@@ -8,6 +8,7 @@ struct InfiniteGridMaterial {
     scale: f32;
     x_axis_col: vec3<f32>;
     z_axis_col: vec3<f32>;
+    shadow_col: vec4<f32>;
 };
 [[group(1), binding(0)]]
 var<uniform> material: InfiniteGridMaterial;
@@ -139,20 +140,26 @@ fn grid(real_coords: vec3<f32>, plane_coords: vec2<f32>, scale: f32, shadow: f32
     let derivative = fwidth(coord);
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let line = min(grid.x, grid.y);
+
     let minimumz = min(derivative.y, 1.) / scale;
     let minimumx = min(derivative.x, 1.) / scale;
-    let base_alpha = max(1.0 - min(line, 1.0), 0.7 * (1. - shadow));
+
+    let base_alpha = 1.0 - min(line, 1.0);
     let dist_fadeout = min(1., 1. - material.scale * real_depth / 100.);
     let dot_fadeout = abs(dot(material.normal, normalize(view.world_position - real_coords)));
     let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout);
-    var color = vec4<f32>(
-        vec3<f32>(min(shadow, 0.2)),
-        base_alpha * alpha_fadeout
-    );
+    let true_alpha = base_alpha * alpha_fadeout;
+
+    var color = vec4<f32>(vec3<f32>(0.2), true_alpha);
+
+    color = mix(color, material.shadow_col, 1. - shadow);
+
     let z_axis_cond = plane_coords.x > -0.5 * minimumx && plane_coords.x < 0.5 * minimumx;
     let x_axis_cond = plane_coords.y > -0.5 * minimumz && plane_coords.y < 0.5 * minimumz;
+
     color = mix(color, vec4<f32>(material.z_axis_col, color.a), f32(z_axis_cond));
     color = mix(color, vec4<f32>(material.x_axis_col, color.a), f32(x_axis_cond));
+
     return color;
 }
 
