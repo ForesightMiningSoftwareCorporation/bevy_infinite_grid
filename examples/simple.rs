@@ -35,7 +35,11 @@ fn setup_system(
     commands.spawn_bundle(PbrBundle {
         material: standard_materials.add(StandardMaterial::default()),
         mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-        transform: Transform::from_xyz(3.0, 4.0, 0.0),
+        transform: Transform {
+            translation: Vec3::new(3., 4., 0.),
+            rotation: Quat::from_rotation_arc(Vec3::Y, Vec3::ONE.normalize()),
+            scale: Vec3::splat(1.5),
+        },
         ..default()
     });
     commands.spawn_bundle(PbrBundle {

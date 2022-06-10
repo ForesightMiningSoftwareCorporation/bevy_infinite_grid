@@ -233,7 +233,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     out.depth = clip_depth;
 
-    let shadow = floor(fetch_directional_shadow(0u, vec4<f32>(frag_pos_3d, 1.), plane_normal));
+    let shadow = fetch_directional_shadow(0u, vec4<f32>(frag_pos_3d, 1.), plane_normal);
     out.color = grid(frag_pos_3d, plane_coords, material.scale, shadow, real_depth);
 
     return out;
