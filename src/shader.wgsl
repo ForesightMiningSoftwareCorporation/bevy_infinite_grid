@@ -21,7 +21,7 @@ struct Vertex {
     [[builtin(vertex_index)]] index: u32;
 };
 
-fn inverse(m: mat4x4<f32>) -> mat4x4<f32> {
+fn inverse_mat(m: mat4x4<f32>) -> mat4x4<f32> {
     let m00 = m[0][0];
     let m01 = m[0][1];
     let m02 = m[0][2];
@@ -105,7 +105,7 @@ fn inverse(m: mat4x4<f32>) -> mat4x4<f32> {
 }
 
 fn unproject_point(point: vec3<f32>) -> vec3<f32> {
-    let proj_inverse = inverse(view.projection);
+    let proj_inverse = inverse_mat(view.projection);
     let unprojected = view.view * proj_inverse * vec4<f32>(point, 1.0);
     return unprojected.xyz / unprojected.w;
 }
