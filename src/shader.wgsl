@@ -148,7 +148,7 @@ fn grid(real_coords: vec3<f32>, plane_coords: vec2<f32>, scale: f32, shadow: f32
     let dist_fadeout = min(1., 1. - material.scale * real_depth / 100.);
     let dot_fadeout = abs(dot(material.normal, normalize(view.world_position - real_coords)));
     let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout);
-    let true_alpha = base_alpha * alpha_fadeout;
+    let true_alpha = base_alpha * alpha_fadeout * step(0.01, abs(dot(material.normal, view.world_position - real_coords)));
 
     var color = vec4<f32>(vec3<f32>(0.2), true_alpha);
 
