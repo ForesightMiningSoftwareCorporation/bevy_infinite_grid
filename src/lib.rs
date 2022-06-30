@@ -1,61 +1,22 @@
-use std::borrow::Cow;
+mod render;
 
-use bevy::{
-    core_pipeline::Transparent3d,
-    ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
-        SystemParamItem,
-    },
-    pbr::NotShadowCaster,
-    prelude::*,
-    reflect::TypeUuid,
-    render::{
-        mesh::PrimitiveTopology,
-        render_phase::{
-            AddRenderCommand, DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline,
-        },
-        render_resource::{
-            std140::AsStd140, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState,
-            BufferBindingType, BufferSize, ColorTargetState, ColorWrites, CompareFunction,
-            DepthBiasState, DepthStencilState, DynamicUniformVec, FragmentState, MultisampleState,
-            PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor, ShaderStages,
-            SpecializedRenderPipeline, SpecializedRenderPipelines, StencilFaceState, StencilState,
-            TextureFormat, VertexState,
-        },
-        renderer::{RenderDevice, RenderQueue},
-        texture::BevyDefault,
-        view::{ExtractedView, NoFrustumCulling, VisibleEntities},
-        RenderApp, RenderStage,
-    },
-};
-
-static SHADER: &str = include_str!("shader.wgsl");
-
-const SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 15204473893972682982);
+use bevy::math::{Vec3Swizzles, Vec4Swizzles};
+use bevy::prelude::*;
+use bevy::render::camera::Camera3d;
+use bevy::render::primitives::Aabb;
+use bevy::render::view::{VisibilitySystems, VisibleEntities};
+use bevy::{pbr::NotShadowCaster, render::view::NoFrustumCulling};
 
 pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
-        app.world
-            .resource_mut::<Assets<Shader>>()
-            .set_untracked(SHADER_HANDLE, Shader::from_wgsl(SHADER));
-
-        let render_app = app.get_sub_app_mut(RenderApp).unwrap();
-        render_app
-            .init_resource::<GridViewUniforms>()
-            .init_resource::<InfiniteGridUniforms>()
-            .init_resource::<InfiniteGridPipeline>()
-            .init_resource::<SpecializedRenderPipelines<InfiniteGridPipeline>>()
-            .add_render_command::<Transparent3d, DrawInfiniteGrid>()
-            .add_system_to_stage(RenderStage::Extract, extract_infinite_grids)
-            .add_system_to_stage(RenderStage::Prepare, prepare_infinite_grids)
-            .add_system_to_stage(RenderStage::Prepare, prepare_grid_view_bind_groups)
-            .add_system_to_stage(RenderStage::Queue, queue_infinite_grids)
-            .add_system_to_stage(RenderStage::Queue, queue_grid_view_bind_groups);
+        render::render_app_builder(app);
+        app.add_system_to_stage(CoreStage::PostUpdate, track_frustum_intersect_system)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                track_caster_visibility.after(VisibilitySystems::CheckVisibility),
+            );
     }
 }
 
@@ -64,12 +25,8 @@ pub struct InfiniteGrid {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
     pub shadow_color: Color,
-}
-
-#[derive(Component)]
-struct ExtractedInfiniteGrid {
-    transform: GlobalTransform,
-    grid: InfiniteGrid,
+    pub minor_line_color: Color,
+    pub major_line_color: Color,
 }
 
 impl Default for InfiniteGrid {
@@ -78,372 +35,31 @@ impl Default for InfiniteGrid {
             x_axis_color: Color::rgb(1.0, 0.2, 0.2),
             z_axis_color: Color::rgb(0.2, 0.2, 1.0),
             shadow_color: Color::rgba(0.2, 0.2, 0.2, 0.7),
+            minor_line_color: Color::rgb(0.1, 0.1, 0.1),
+            major_line_color: Color::rgb(0.25, 0.25, 0.25),
         }
     }
 }
 
-#[derive(Debug, AsStd140)]
-pub struct InfiniteGridUniform {
-    rot_matrix: Mat3,
-    offset: Vec3,
-    normal: Vec3,
-    scale: f32,
-
-    x_axis_color: Vec3,
-    z_axis_color: Vec3,
-    shadow_color: Vec4,
-}
-
-#[derive(Default)]
-struct InfiniteGridUniforms {
-    uniforms: DynamicUniformVec<InfiniteGridUniform>,
-}
-
-#[derive(Component)]
-struct InfiniteGridUniformOffset {
-    offset: u32,
-}
-
-struct InfiniteGridBindGroup {
-    value: BindGroup,
-}
-
-#[derive(Clone, AsStd140)]
-pub struct GridViewUniform {
-    projection: Mat4,
-    inverse_projection: Mat4,
-    view: Mat4,
-    inverse_view: Mat4,
-    world_position: Vec3,
-}
-
-#[derive(Default)]
-pub struct GridViewUniforms {
-    uniforms: DynamicUniformVec<GridViewUniform>,
-}
-
-#[derive(Component)]
-pub struct GridViewUniformOffset {
-    pub offset: u32,
-}
-
-#[derive(Component)]
-struct GridViewBindGroup {
-    value: BindGroup,
-}
-
-struct SetGridViewBindGroup<const I: usize>;
-
-impl<const I: usize> EntityRenderCommand for SetGridViewBindGroup<I> {
-    type Param = SQuery<(Read<GridViewUniformOffset>, Read<GridViewBindGroup>)>;
-
-    fn render<'w>(
-        view: Entity,
-        _item: Entity,
-        param: SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        let (view_uniform, bind_group) = param.get_inner(view).unwrap();
-        pass.set_bind_group(I, &bind_group.value, &[view_uniform.offset]);
-
-        RenderCommandResult::Success
-    }
-}
-struct SetInfiniteGridBindGroup<const I: usize>;
-
-impl<const I: usize> EntityRenderCommand for SetInfiniteGridBindGroup<I> {
-    type Param = (
-        SRes<InfiniteGridBindGroup>,
-        SQuery<Read<InfiniteGridUniformOffset>>,
-    );
-
-    fn render<'w>(
-        _view: Entity,
-        item: Entity,
-        (bind_group, query): SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        let offset = query.get_inner(item).unwrap();
-        pass.set_bind_group(I, &bind_group.into_inner().value, &[offset.offset]);
-        RenderCommandResult::Success
-    }
-}
-
-fn prepare_grid_view_bind_groups(
-    mut commands: Commands,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
-    mut view_uniforms: ResMut<GridViewUniforms>,
-    views: Query<(Entity, &ExtractedView)>,
-) {
-    view_uniforms.uniforms.clear();
-    for (entity, camera) in views.iter() {
-        let projection = camera.projection;
-        let view = camera.transform.compute_matrix();
-        let inverse_view = view.inverse();
-        commands.entity(entity).insert(GridViewUniformOffset {
-            offset: view_uniforms.uniforms.push(GridViewUniform {
-                projection,
-                view,
-                inverse_view,
-                inverse_projection: projection.inverse(),
-                world_position: camera.transform.translation,
-            }),
-        });
-    }
-
-    view_uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue)
-}
-
-fn queue_grid_view_bind_groups(
-    mut commands: Commands,
-    render_device: Res<RenderDevice>,
-    uniforms: Res<GridViewUniforms>,
-    pipeline: Res<InfiniteGridPipeline>,
-    views: Query<Entity, With<GridViewUniformOffset>>,
-) {
-    let binding = uniforms.uniforms.binding().unwrap();
-    for entity in views.iter() {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("grid-view-bind-group"),
-            layout: &pipeline.view_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: binding.clone(),
-            }],
-        });
-        commands
-            .entity(entity)
-            .insert(GridViewBindGroup { value: bind_group });
-    }
-}
-
-fn extract_infinite_grids(
-    mut commands: Commands,
-    grids: Query<(Entity, &InfiniteGrid, &GlobalTransform)>,
-) {
-    for (entity, grid, transform) in grids.iter() {
-        commands.insert_or_spawn_batch(Some((
-            entity,
-            (ExtractedInfiniteGrid {
-                transform: transform.clone(),
-                grid: grid.clone(),
-            },),
-        )));
-    }
-}
-
-fn prepare_infinite_grids(
-    mut commands: Commands,
-    grids: Query<(Entity, &ExtractedInfiniteGrid)>,
-    mut uniforms: ResMut<InfiniteGridUniforms>,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
-) {
-    uniforms.uniforms.clear();
-    for (entity, extracted) in grids.iter() {
-        let transform = extracted.transform;
-        let offset = transform.translation;
-        let normal = transform.local_y();
-        let rot_matrix = Mat3::from_quat(transform.rotation.inverse());
-        commands.entity(entity).insert(InfiniteGridUniformOffset {
-            offset: uniforms.uniforms.push(dbg!(InfiniteGridUniform {
-                rot_matrix,
-                offset,
-                normal,
-                scale: transform.scale.x,
-                x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
-                z_axis_color: Vec3::from_slice(&extracted.grid.z_axis_color.as_rgba_f32()),
-                shadow_color: Vec4::from_slice(&extracted.grid.shadow_color.as_rgba_f32()),
-            })),
-        });
-    }
-
-    uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue);
-}
-
-fn queue_infinite_grids(
-    mut pipeline_cache: ResMut<PipelineCache>,
-    transparent_draw_functions: Res<DrawFunctions<Transparent3d>>,
-    mut commands: Commands,
-    uniforms: Res<InfiniteGridUniforms>,
-    pipeline: Res<InfiniteGridPipeline>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<InfiniteGridPipeline>>,
-    render_device: Res<RenderDevice>,
-    infinite_grids: Query<&ExtractedInfiniteGrid>,
-    mut views: Query<(&VisibleEntities, &mut RenderPhase<Transparent3d>)>,
-) {
-    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: Some("infinite-grid-bind-group"),
-        layout: &pipeline.infinite_grid_layout,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: uniforms.uniforms.binding().unwrap(),
-        }],
-    });
-    commands.insert_resource(InfiniteGridBindGroup { value: bind_group });
-
-    let draw_function_id = transparent_draw_functions
-        .read()
-        .get_id::<DrawInfiniteGrid>()
-        .unwrap();
-
-    let pipeline = pipelines.specialize(&mut pipeline_cache, &pipeline, ());
-
-    for (entities, mut phase) in views.iter_mut() {
-        for &entity in &entities.entities {
-            if infinite_grids.contains(entity) {
-                phase.items.push(Transparent3d {
-                    pipeline,
-                    entity,
-                    draw_function: draw_function_id,
-                    distance: 0.5,
-                });
-            }
-        }
-    }
-}
-
-type DrawInfiniteGrid = (
-    SetItemPipeline,
-    SetGridViewBindGroup<0>,
-    SetInfiniteGridBindGroup<1>,
-    FinishDrawInfiniteGrid,
-);
-
-struct FinishDrawInfiniteGrid;
-
-impl EntityRenderCommand for FinishDrawInfiniteGrid {
-    type Param = ();
-
-    fn render<'w>(
-        _view: Entity,
-        _item: Entity,
-        _param: SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
-    ) -> RenderCommandResult {
-        pass.draw(0..4, 0..1);
-        RenderCommandResult::Success
-    }
-}
-
-struct InfiniteGridPipeline {
-    view_layout: BindGroupLayout,
-    infinite_grid_layout: BindGroupLayout,
-}
-
-impl FromWorld for InfiniteGridPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("grid-view-bind-group-layout"),
-            entries: &[BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: true,
-                    min_binding_size: BufferSize::new(GridViewUniform::std140_size_static() as u64),
-                },
-                count: None,
-            }],
-        });
-        let infinite_grid_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("infinite-grid-bind-group-layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(
-                            InfiniteGridUniform::std140_size_static() as u64,
-                        ),
-                    },
-                    count: None,
-                }],
-            });
-        Self {
-            view_layout,
-            infinite_grid_layout,
-        }
-    }
-}
-
-impl SpecializedRenderPipeline for InfiniteGridPipeline {
-    type Key = ();
-
-    fn specialize(&self, _: Self::Key) -> RenderPipelineDescriptor {
-        RenderPipelineDescriptor {
-            label: Some(Cow::Borrowed("grid-render-pipeline")),
-            layout: Some(vec![
-                self.view_layout.clone(),
-                self.infinite_grid_layout.clone(),
-            ]),
-            vertex: VertexState {
-                shader: SHADER_HANDLE.typed(),
-                shader_defs: vec![],
-                entry_point: Cow::Borrowed("vertex"),
-                buffers: vec![],
-            },
-            primitive: PrimitiveState {
-                topology: PrimitiveTopology::TriangleStrip,
-                strip_index_format: None,
-                front_face: bevy::render::render_resource::FrontFace::Ccw,
-                cull_mode: None,
-                unclipped_depth: false,
-                polygon_mode: PolygonMode::Fill,
-                conservative: false,
-            },
-            depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: CompareFunction::Greater,
-                stencil: StencilState {
-                    front: StencilFaceState::IGNORE,
-                    back: StencilFaceState::IGNORE,
-                    read_mask: 0,
-                    write_mask: 0,
-                },
-                bias: DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
-            }),
-            multisample: MultisampleState {
-                count: 4,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            fragment: Some(FragmentState {
-                shader: SHADER_HANDLE.typed(),
-                shader_defs: vec![],
-                entry_point: Cow::Borrowed("fragment"),
-                targets: vec![ColorTargetState {
-                    format: TextureFormat::bevy_default(),
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
-                }],
-            }),
-        }
-    }
+#[derive(Component, Default, Clone, Copy)]
+pub struct GridFrustumIntersect {
+    pub points: [Vec3; 4],
+    pub center: Vec3,
+    pub up_dir: Vec3,
+    pub width: f32,
+    pub height: f32,
 }
 
 #[derive(Bundle)]
 pub struct InfiniteGridBundle {
-    transform: Transform,
-    global_transform: GlobalTransform,
-    grid: InfiniteGrid,
-    visibility: Visibility,
-    computed_visibility: ComputedVisibility,
-    no_frustum_culling: NoFrustumCulling,
-    not_shadow_caster: NotShadowCaster,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    pub grid: InfiniteGrid,
+    pub frustum_intersect: GridFrustumIntersect,
+    pub visibility: Visibility,
+    pub computed_visibility: ComputedVisibility,
+    pub shadow_casters: VisibleEntities,
+    pub no_frustum_culling: NoFrustumCulling,
 }
 
 impl Default for InfiniteGridBundle {
@@ -452,10 +68,154 @@ impl Default for InfiniteGridBundle {
             transform: Default::default(),
             global_transform: Default::default(),
             grid: Default::default(),
+            frustum_intersect: Default::default(),
             visibility: Default::default(),
             computed_visibility: Default::default(),
+            shadow_casters: Default::default(),
             no_frustum_culling: NoFrustumCulling,
-            not_shadow_caster: NotShadowCaster,
+        }
+    }
+}
+
+fn calculate_distant_from(cam: &GlobalTransform, grid: &GlobalTransform) -> Vec3 {
+    let cam_pos = cam.translation;
+    let cam_dir = cam.local_z();
+
+    let inverse_rot = grid.rotation.inverse();
+
+    let gs_cam_pos = inverse_rot * (cam_pos - grid.translation);
+    let gs_cam_dir = inverse_rot * cam_dir;
+
+    let pos_in_grid_space = (gs_cam_pos.xz() - gs_cam_dir.xz().normalize() * 200. * grid.scale.x)
+        .extend(0.)
+        .xzy();
+
+    grid.translation + pos_in_grid_space
+}
+
+fn track_frustum_intersect_system(
+    mut grids: Query<(&GlobalTransform, &mut GridFrustumIntersect), With<InfiniteGrid>>,
+    camera: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+) {
+    let (cam_pos, cam) = camera.single();
+
+    let view = cam_pos.compute_matrix();
+    let inverse_view = view.inverse();
+    let reverse_proj = cam.projection_matrix.inverse();
+
+    for (grid, mut intersects) in grids.iter_mut() {
+        let distant_point = calculate_distant_from(cam_pos, grid);
+        let projected = cam.projection_matrix * inverse_view * distant_point.extend(1.);
+        let coords = projected.xyz() / projected.w;
+
+        let horizon_sign = (cam_pos.translation - grid.translation)
+            .dot(grid.local_y())
+            .signum();
+
+        let horizon = (-1.0..1.0)
+            .contains(&coords.y)
+            .then(|| coords.y)
+            .unwrap_or(horizon_sign);
+
+        let seeds = [
+            Vec2::new(1., horizon),
+            Vec2::new(1., -horizon_sign),
+            Vec2::new(-1., -horizon_sign),
+            Vec2::new(-1., horizon),
+        ];
+
+        let plane_normal = grid.local_y();
+        let plane_origin = grid.translation;
+
+        let points = seeds.map(|sp| {
+            let val = view * reverse_proj * sp.extend(1.).extend(1.);
+            let near_point = val.xyz() / val.w;
+            let val = view * reverse_proj * sp.extend(0.001).extend(1.);
+            let far_point = val.xyz() / val.w;
+
+            let ray_origin = near_point;
+            let ray_direction = (far_point - near_point).normalize();
+
+            let denominator = ray_direction.dot(plane_normal);
+            let point_to_point = plane_origin - ray_origin;
+            let t = plane_normal.dot(point_to_point) / denominator;
+            let pos = ray_direction * t + ray_origin;
+
+            pos
+        });
+
+        intersects.points = points;
+        intersects.center = points.iter().sum::<Vec3>() / 4.;
+        intersects.up_dir = ((points[0] + points[3]) - (points[1] + points[2])).normalize();
+
+        intersects.height = (points[0] - points[1]).dot(intersects.up_dir);
+        let w1 = points[0].distance_squared(points[3]);
+        let w2 = points[1].distance_squared(points[2]);
+        intersects.width = w1.max(w2).sqrt();
+    }
+}
+
+fn track_caster_visibility(
+    mut grids: Query<(
+        &mut VisibleEntities,
+        &GlobalTransform,
+        &GridFrustumIntersect,
+    )>,
+    mut meshes: Query<
+        (
+            Entity,
+            &Visibility,
+            &mut ComputedVisibility,
+            Option<(&GlobalTransform, &Aabb)>,
+        ),
+        (With<Handle<Mesh>>, Without<NotShadowCaster>),
+    >,
+) {
+    for (mut visibles, grid_transform, grid) in grids.iter_mut() {
+        let inv_rot = grid_transform.rotation.inverse();
+        let project_to_grid = |point: Vec3| (inv_rot * point).xz();
+        let intersecting_point_test = |point: Vec3| {
+            let grid_points = grid.points.map(project_to_grid);
+            grid_points
+                .into_iter()
+                .scan(grid_points[3], |last_point, p| {
+                    let lp = *last_point;
+                    *last_point = p;
+                    Some((lp, p))
+                })
+                .all(|(lp, p)| (p - lp).perp_dot(project_to_grid(point) - lp) > 0.)
+        };
+        for (entity, visibility, mut computed, intersect_testable) in meshes.iter_mut() {
+            if !visibility.is_visible {
+                continue;
+            }
+
+            if let Some((transform, aabb)) = intersect_testable {
+                let matrix = transform.compute_matrix();
+                let min = aabb.center - aabb.half_extents;
+                let max = aabb.center + aabb.half_extents;
+                let points = [
+                    Vec3::new(min.x, min.y, min.z),
+                    Vec3::new(max.x, min.y, min.z),
+                    Vec3::new(min.x, max.y, min.z),
+                    Vec3::new(min.x, min.y, max.z),
+                    Vec3::new(min.x, max.y, max.z),
+                    Vec3::new(max.x, min.y, max.z),
+                    Vec3::new(max.x, max.y, min.z),
+                    Vec3::new(max.x, max.y, max.z),
+                ];
+                let intersect = points
+                    .into_iter()
+                    .map(|point| matrix.transform_point3(point))
+                    .any(intersecting_point_test);
+
+                if !intersect {
+                    continue;
+                }
+            }
+
+            computed.is_visible = true;
+            visibles.entities.push(entity);
         }
     }
 }
