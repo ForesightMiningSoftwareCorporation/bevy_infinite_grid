@@ -3,6 +3,8 @@ struct InfiniteGrid {
     origin: vec3<f32>;
     normal: vec3<f32>;
     scale: f32;
+    // 1 / fadeout_distance
+    fadeout_const: f32;
     x_axis_col: vec3<f32>;
     z_axis_col: vec3<f32>;
     shadow_col: vec4<f32>;
@@ -69,6 +71,12 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     return out;
 }
 
+fn base_grid(coord: vec2<f32>) -> f32 {
+    let derivative = fwidth(coord);
+    let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
+    let line = min(grid.x, grid.y);
+    return line;
+}
 
 fn color_grid(real_coords: vec3<f32>, plane_coords: vec2<f32>, scale: f32, shadow: f32, real_depth: f32) -> vec4<f32> {
     let coord = plane_coords * scale; // use the scale variable to set the distance between the lines
@@ -79,28 +87,25 @@ fn color_grid(real_coords: vec3<f32>, plane_coords: vec2<f32>, scale: f32, shado
     let minimumz = min(derivative.y, 1.) / scale;
     let minimumx = min(derivative.x, 1.) / scale;
 
-    let mg_coord = coord * 0.1;
-    let mg_derivative = fwidth(mg_coord);
-    let mg_grid = abs(fract(mg_coord - 0.5) - 0.5) / mg_derivative;
-    let mg_line = min(mg_grid.x, mg_grid.y);
+    let mg_line = base_grid(coord * 0.1);
 
-    let base_color = mix(infinite_grid.major_line_col, infinite_grid.minor_line_col, step(1., mg_line));
+    let grid_alpha = 1.0 - min(line, 1.0);
+    let base_grid_color = mix(infinite_grid.major_line_col, infinite_grid.minor_line_col, step(1., mg_line));
+    let grid_color = vec4<f32>(base_grid_color.rgb, base_grid_color.a * grid_alpha);
 
-    let base_alpha = base_color.a * (1.0 - min(line, 1.0));
-    let dist_fadeout = min(1., 1. - infinite_grid.scale * real_depth / 100.);
-    let dot_fadeout = abs(dot(infinite_grid.normal, normalize(view.world_position - real_coords)));
-    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout);
-    let true_alpha = base_alpha * alpha_fadeout * step(0.01, abs(dot(infinite_grid.normal, view.world_position - real_coords)));
-
-    var color = vec4<f32>(base_color.rgb, true_alpha);
-
-    color = mix(color, infinite_grid.shadow_col, 1. - shadow);
+    var color = mix(grid_color, infinite_grid.shadow_col, 1. - shadow);
 
     let z_axis_cond = plane_coords.x > -1.0 * minimumx && plane_coords.x < 1.0 * minimumx;
     let x_axis_cond = plane_coords.y > -1.0 * minimumz && plane_coords.y < 1.0 * minimumz;
 
     color = mix(color, vec4<f32>(infinite_grid.z_axis_col, color.a), f32(z_axis_cond));
     color = mix(color, vec4<f32>(infinite_grid.x_axis_col, color.a), f32(x_axis_cond));
+
+    let dist_fadeout = min(1., 1. - infinite_grid.fadeout_const * real_depth);
+    let dot_fadeout = abs(dot(infinite_grid.normal, normalize(view.world_position - real_coords)));
+    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * step(0.01, dot_fadeout);
+
+    color.a = color.a * alpha_fadeout;
 
     return color;
 }
@@ -141,8 +146,11 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let offset_location = grid_pos_relative_to_shadow_center / shadow_size;
     let uv = offset_location + vec2<f32>(0.5);
 
+    let checks = step(vec2<f32>(1.), uv) + step(vec2<f32>(0.), -uv);
+    let inbounds = 1. - step(1., checks.x + checks.y);
+
     let shadow = textureSample(grid_shadow_texture, grid_shadow_sampler, uv).r;
-    out.color = color_grid(frag_pos_3d, plane_coords, infinite_grid.scale, 1. - shadow, real_depth);
+    out.color = color_grid(frag_pos_3d, plane_coords, infinite_grid.scale, 1. - shadow * inbounds, real_depth);
 
     return out;
 }

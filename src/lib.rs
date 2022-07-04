@@ -27,6 +27,7 @@ pub struct InfiniteGrid {
     pub shadow_color: Color,
     pub minor_line_color: Color,
     pub major_line_color: Color,
+    pub fadeout_distance: f32,
 }
 
 impl Default for InfiniteGrid {
@@ -37,11 +38,12 @@ impl Default for InfiniteGrid {
             shadow_color: Color::rgba(0.2, 0.2, 0.2, 0.7),
             minor_line_color: Color::rgb(0.1, 0.1, 0.1),
             major_line_color: Color::rgb(0.25, 0.25, 0.25),
+            fadeout_distance: 100.,
         }
     }
 }
 
-#[derive(Component, Default, Clone, Copy)]
+#[derive(Component, Default, Clone, Copy, Debug)]
 pub struct GridFrustumIntersect {
     pub points: [Vec3; 4],
     pub center: Vec3,
@@ -77,24 +79,44 @@ impl Default for InfiniteGridBundle {
     }
 }
 
-fn calculate_distant_from(cam: &GlobalTransform, grid: &GlobalTransform) -> Vec3 {
+pub fn calculate_distant_from(
+    cam: &GlobalTransform,
+    grid: &GlobalTransform,
+    view_distance: f32,
+) -> Vec3 {
     let cam_pos = cam.translation;
     let cam_dir = cam.local_z();
 
     let inverse_rot = grid.rotation.inverse();
 
-    let gs_cam_pos = inverse_rot * (cam_pos - grid.translation);
-    let gs_cam_dir = inverse_rot * cam_dir;
+    let gs_cam_pos = (inverse_rot * (cam_pos - grid.translation)).xz();
+    let gs_cam_dir = (inverse_rot * cam_dir).xz().normalize();
 
-    let pos_in_grid_space = (gs_cam_pos.xz() - gs_cam_dir.xz().normalize() * 200. * grid.scale.x)
-        .extend(0.)
-        .xzy();
+    let h = (cam_pos - grid.translation).dot(grid.local_y()).abs();
+    let s = 1. / view_distance;
 
-    grid.translation + pos_in_grid_space
+    let f = |d: f32| (1. - d * s) * (h * h + d * d).sqrt() + h * d * s;
+    let f_prime =
+        |d: f32| -s * (h * h + d * d).sqrt() + ((1. - d * s) * d / (h * h + d * d).sqrt()) + h * s;
+
+    // use a non-zero first guess for newton iteration as f_prime(0) == 0
+    let x_zero = (1. + h * s) / s;
+
+    let mut x = x_zero;
+    for _ in 0..2 {
+        x = x - f(x) / f_prime(x);
+    }
+
+    let dist = x;
+
+    let pos_in_grid_space = gs_cam_pos - gs_cam_dir * dist;
+    let pos_in_3d_gs = grid.rotation * pos_in_grid_space.extend(0.).xzy();
+
+    grid.translation + pos_in_3d_gs
 }
 
 fn track_frustum_intersect_system(
-    mut grids: Query<(&GlobalTransform, &mut GridFrustumIntersect), With<InfiniteGrid>>,
+    mut grids: Query<(&GlobalTransform, &InfiniteGrid, &mut GridFrustumIntersect)>,
     camera: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
 ) {
     let (cam_pos, cam) = camera.single();
@@ -103,8 +125,8 @@ fn track_frustum_intersect_system(
     let inverse_view = view.inverse();
     let reverse_proj = cam.projection_matrix.inverse();
 
-    for (grid, mut intersects) in grids.iter_mut() {
-        let distant_point = calculate_distant_from(cam_pos, grid);
+    for (grid, grid_params, mut intersects) in grids.iter_mut() {
+        let distant_point = calculate_distant_from(cam_pos, grid, grid_params.fadeout_distance);
         let projected = cam.projection_matrix * inverse_view * distant_point.extend(1.);
         let coords = projected.xyz() / projected.w;
 
@@ -116,6 +138,7 @@ fn track_frustum_intersect_system(
             .contains(&coords.y)
             .then(|| coords.y)
             .unwrap_or(horizon_sign);
+        // let horizon = horizon_sign;
 
         let seeds = [
             Vec2::new(1., horizon),
@@ -190,6 +213,7 @@ fn track_caster_visibility(
                 continue;
             }
 
+            // TODO: change this so we create a frustum out of grid intersect points instead, then compute intersections against that
             if let Some((transform, aabb)) = intersect_testable {
                 let matrix = transform.compute_matrix();
                 let min = aabb.center - aabb.half_extents;
@@ -210,10 +234,9 @@ fn track_caster_visibility(
                     .any(intersecting_point_test);
 
                 if !intersect {
-                    continue;
+                    // continue;
                 }
             }
-
             computed.is_visible = true;
             visibles.entities.push(entity);
         }

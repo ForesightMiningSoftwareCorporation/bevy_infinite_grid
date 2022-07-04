@@ -54,6 +54,8 @@ pub struct InfiniteGridUniform {
     offset: Vec3,
     normal: Vec3,
     scale: f32,
+    // 1 / fadeout_distance
+    fadeout_const: f32,
 
     x_axis_color: Vec3,
     z_axis_color: Vec3,
@@ -255,6 +257,7 @@ fn prepare_infinite_grids(
                 offset,
                 normal,
                 scale: transform.scale.x,
+                fadeout_const: 1. / extracted.grid.fadeout_distance,
                 x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
                 z_axis_color: Vec3::from_slice(&extracted.grid.z_axis_color.as_rgba_f32()),
                 shadow_color: Vec4::from_slice(&extracted.grid.shadow_color.as_rgba_f32()),
