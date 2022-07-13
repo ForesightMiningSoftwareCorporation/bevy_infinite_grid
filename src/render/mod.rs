@@ -1,5 +1,7 @@
 mod shadow;
 
+pub use shadow::RenderSettings;
+
 use std::borrow::Cow;
 
 use bevy::{
