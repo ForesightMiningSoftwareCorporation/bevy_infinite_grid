@@ -39,7 +39,7 @@ use bevy::{
     window::WindowId,
 };
 
-use crate::GridFrustumIntersect;
+use crate::{GridFrustumIntersect, InfiniteGridSettings};
 
 use super::{ExtractedInfiniteGrid, InfiniteGridPipeline};
 
@@ -236,6 +236,7 @@ fn prepare_grid_shadow_views(
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
     windows: Res<ExtractedWindows>,
+    settings: Res<InfiniteGridSettings>,
 ) {
     let primary_window = windows.get(&WindowId::primary()).unwrap();
     let width = primary_window.physical_width;
@@ -247,7 +248,7 @@ fn prepare_grid_shadow_views(
         [height, width]
     };
     let ratio = min as f32 / max as f32;
-    let tmax = 16384u32;
+    let tmax = settings.max_texture_size;
     let tmin = (tmax as f32 * ratio) as u32;
     let [width, height] = if comp { [tmin, tmax] } else { [tmax, tmin] };
     for (entity, grid, frustum_intersect) in grids.iter() {
