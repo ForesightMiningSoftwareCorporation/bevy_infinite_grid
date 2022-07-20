@@ -316,7 +316,7 @@ fn queue_infinite_grids(
                     pipeline,
                     entity,
                     draw_function: draw_function_id,
-                    distance: 0.5,
+                    distance: f32::NEG_INFINITY,
                 });
             }
         }
