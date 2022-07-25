@@ -4,7 +4,8 @@ struct InfiniteGrid {
     normal: vec3<f32>;
     scale: f32;
     // 1 / fadeout_distance
-    fadeout_const: f32;
+    dist_fadeout_const: f32;
+    dot_fadeout_const: f32;
     x_axis_col: vec3<f32>;
     z_axis_col: vec3<f32>;
     shadow_col: vec4<f32>;
@@ -138,9 +139,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     color = mix(color, vec4<f32>(infinite_grid.z_axis_col, color.a), f32(z_axis_cond));
     color = mix(color, vec4<f32>(infinite_grid.x_axis_col, color.a), f32(x_axis_cond));
 
-    let dist_fadeout = min(1., 1. - infinite_grid.fadeout_const * real_depth);
+    let dist_fadeout = min(1., 1. - infinite_grid.dist_fadeout_const * real_depth);
     let dot_fadeout = abs(dot(infinite_grid.normal, normalize(view.world_position - frag_pos_3d)));
-    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * step(0.01, dot_fadeout);
+    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * min(infinite_grid.dot_fadeout_const * dot_fadeout, 1.);
 
     color.a = color.a * alpha_fadeout;
     out.color = color;

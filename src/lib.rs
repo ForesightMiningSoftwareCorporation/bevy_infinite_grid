@@ -28,6 +28,7 @@ pub struct InfiniteGrid {
     pub minor_line_color: Color,
     pub major_line_color: Color,
     pub fadeout_distance: f32,
+    pub dot_fadeout_strength: f32,
 }
 
 impl Default for InfiniteGrid {
@@ -39,6 +40,7 @@ impl Default for InfiniteGrid {
             minor_line_color: Color::rgb(0.1, 0.1, 0.1),
             major_line_color: Color::rgb(0.25, 0.25, 0.25),
             fadeout_distance: 100.,
+            dot_fadeout_strength: 0.25,
         }
     }
 }
