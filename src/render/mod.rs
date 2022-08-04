@@ -3,7 +3,7 @@ mod shadow;
 use std::borrow::Cow;
 
 use bevy::{
-    core_pipeline::Transparent3d,
+    core_pipeline::core_3d::Transparent3d,
     ecs::system::{
         lifetimeless::{Read, SQuery, SRes},
         SystemParamItem,
@@ -17,19 +17,19 @@ use bevy::{
             SetItemPipeline,
         },
         render_resource::{
-            std140::AsStd140, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+            BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
             BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState,
             BufferBindingType, BufferSize, ColorTargetState, ColorWrites, CompareFunction,
-            DepthBiasState, DepthStencilState, DynamicUniformVec, FragmentState, MultisampleState,
-            PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderStages, SpecializedRenderPipeline,
+            DepthBiasState, DepthStencilState, DynamicUniformBuffer, FragmentState,
+            MultisampleState, PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor,
+            SamplerBindingType, ShaderStages, ShaderType, SpecializedRenderPipeline,
             SpecializedRenderPipelines, StencilFaceState, StencilState, TextureFormat,
             TextureSampleType, TextureViewDimension, VertexState,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::{ExtractedView, VisibleEntities},
-        RenderApp, RenderStage,
+        Extract, RenderApp, RenderStage,
     },
 };
 
@@ -48,7 +48,7 @@ struct ExtractedInfiniteGrid {
     grid: InfiniteGrid,
 }
 
-#[derive(Debug, AsStd140)]
+#[derive(Debug, ShaderType)]
 pub struct InfiniteGridUniform {
     rot_matrix: Mat3,
     offset: Vec3,
@@ -73,7 +73,7 @@ pub struct InfiniteGridUniform {
 
 #[derive(Default)]
 struct InfiniteGridUniforms {
-    uniforms: DynamicUniformVec<InfiniteGridUniform>,
+    uniforms: DynamicUniformBuffer<InfiniteGridUniform>,
 }
 
 #[derive(Component)]
@@ -85,7 +85,7 @@ struct InfiniteGridBindGroup {
     value: BindGroup,
 }
 
-#[derive(Clone, AsStd140)]
+#[derive(Clone, ShaderType)]
 pub struct GridViewUniform {
     projection: Mat4,
     inverse_projection: Mat4,
@@ -96,7 +96,7 @@ pub struct GridViewUniform {
 
 #[derive(Default)]
 pub struct GridViewUniforms {
-    uniforms: DynamicUniformVec<GridViewUniform>,
+    uniforms: DynamicUniformBuffer<GridViewUniform>,
 }
 
 #[derive(Component)]
@@ -181,7 +181,7 @@ fn prepare_grid_view_bind_groups(
                 view,
                 inverse_view,
                 inverse_projection: projection.inverse(),
-                world_position: camera.transform.translation,
+                world_position: camera.transform.translation(),
             }),
         });
     }
@@ -216,13 +216,15 @@ fn queue_grid_view_bind_groups(
 
 fn extract_infinite_grids(
     mut commands: Commands,
-    mut grids: Query<(
-        Entity,
-        &InfiniteGrid,
-        &GlobalTransform,
-        &GridFrustumIntersect,
-        &mut VisibleEntities,
-    )>,
+    mut grids: Extract<
+        Query<(
+            Entity,
+            &InfiniteGrid,
+            &GlobalTransform,
+            &GridFrustumIntersect,
+            &VisibleEntities,
+        )>,
+    >,
 ) {
     for (entity, grid, transform, frustum_intersect, visible_entities) in grids.iter_mut() {
         commands.insert_or_spawn_batch(Some((
@@ -232,7 +234,7 @@ fn extract_infinite_grids(
                     transform: transform.clone(),
                     grid: grid.clone(),
                 },
-                std::mem::take(visible_entities.into_inner()),
+                visible_entities.clone(),
                 *frustum_intersect,
                 RenderPhase::<GridShadow>::default(),
             ),
@@ -250,15 +252,16 @@ fn prepare_infinite_grids(
     uniforms.uniforms.clear();
     for (entity, extracted, intersect) in grids.iter() {
         let transform = extracted.transform;
-        let offset = transform.translation;
-        let normal = transform.local_y();
-        let rot_matrix = Mat3::from_quat(transform.rotation.inverse());
+        let t = transform.compute_transform();
+        let offset = transform.translation();
+        let normal = transform.up();
+        let rot_matrix = Mat3::from_quat(t.rotation.inverse());
         commands.entity(entity).insert(InfiniteGridUniformOffset {
             offset: uniforms.uniforms.push(InfiniteGridUniform {
                 rot_matrix,
                 offset,
                 normal,
-                scale: transform.scale.x,
+                scale: t.scale.x,
                 dist_fadeout_const: 1. / extracted.grid.fadeout_distance,
                 dot_fadeout_const: 1. / extracted.grid.dot_fadeout_strength,
                 x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
@@ -351,7 +354,7 @@ impl FromWorld for InfiniteGridPipeline {
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
                     has_dynamic_offset: true,
-                    min_binding_size: BufferSize::new(GridViewUniform::std140_size_static() as u64),
+                    min_binding_size: BufferSize::new(GridViewUniform::min_size().into()),
                 },
                 count: None,
             }],
@@ -365,9 +368,7 @@ impl FromWorld for InfiniteGridPipeline {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(
-                            InfiniteGridUniform::std140_size_static() as u64,
-                        ),
+                        min_binding_size: BufferSize::new(InfiniteGridUniform::min_size().into()),
                     },
                     count: None,
                 }],
@@ -455,11 +456,11 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
                 shader: SHADER_HANDLE.typed(),
                 shader_defs: vec![],
                 entry_point: Cow::Borrowed("fragment"),
-                targets: vec![ColorTargetState {
+                targets: vec![Some(ColorTargetState {
                     format: TextureFormat::bevy_default(),
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
-                }],
+                })],
             }),
         }
     }
