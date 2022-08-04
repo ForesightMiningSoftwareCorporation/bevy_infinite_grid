@@ -22,3 +22,6 @@ bevy_flycam = "0.8"
 
 [patch.crates-io]
 bevy = { path = "../bevy" }
+
+tracy-client-sys = { git = "https://github.com/nagisa/rust_tracy_client" }
+tracy-client = { git = "https://github.com/nagisa/rust_tracy_client" }
