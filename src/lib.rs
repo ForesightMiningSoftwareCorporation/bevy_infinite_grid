@@ -86,7 +86,7 @@ pub fn calculate_distant_from(
     view_distance: f32,
 ) -> Vec3 {
     let cam_pos = cam.translation();
-    let cam_dir = cam.forward();
+    let cam_dir = cam.back();
 
     let (_, grid_rot, _) = grid.to_scale_rotation_translation();
 
