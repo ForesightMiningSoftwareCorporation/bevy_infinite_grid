@@ -23,7 +23,7 @@ impl Plugin for InfiniteGridPlugin {
 pub struct InfiniteGrid {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
-    pub shadow_color: Color,
+    pub shadow_color: Option<Color>,
     pub minor_line_color: Color,
     pub major_line_color: Color,
     pub fadeout_distance: f32,
@@ -35,7 +35,7 @@ impl Default for InfiniteGrid {
         Self {
             x_axis_color: Color::rgb(1.0, 0.2, 0.2),
             z_axis_color: Color::rgb(0.2, 0.2, 1.0),
-            shadow_color: Color::rgba(0.2, 0.2, 0.2, 0.7),
+            shadow_color: Some(Color::rgba(0.2, 0.2, 0.2, 0.7)),
             minor_line_color: Color::rgb(0.1, 0.1, 0.1),
             major_line_color: Color::rgb(0.25, 0.25, 0.25),
             fadeout_distance: 100.,
@@ -119,7 +119,13 @@ pub fn calculate_distant_from(
 }
 
 fn track_frustum_intersect_system(
-    mut grids: Query<(&GlobalTransform, &InfiniteGrid, &mut GridFrustumIntersect)>,
+    mut commands: Commands,
+    mut grids: Query<(
+        Entity,
+        &GlobalTransform,
+        &InfiniteGrid,
+        Option<&mut GridFrustumIntersect>,
+    )>,
     camera: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
 ) {
     let (cam_pos, cam) = camera.single();
@@ -128,7 +134,22 @@ fn track_frustum_intersect_system(
     let inverse_view = view.inverse();
     let reverse_proj = cam.projection_matrix().inverse();
 
-    for (grid, grid_params, mut intersects) in grids.iter_mut() {
+    for (entity, grid, grid_params, intersects) in grids.iter_mut() {
+        let mut slot = None;
+        let intersects = match (grid_params.shadow_color.is_none(), intersects) {
+            (true, None) => {
+                continue;
+            }
+            (true, Some(_)) => {
+                commands.entity(entity).remove::<GridFrustumIntersect>();
+                continue;
+            }
+            (false, None) => {
+                slot = Some(GridFrustumIntersect::default());
+                slot.as_mut().unwrap()
+            }
+            (false, Some(val)) => val.into_inner(),
+        };
         let distant_point = calculate_distant_from(cam_pos, grid, grid_params.fadeout_distance);
         let projected = cam.projection_matrix() * inverse_view * distant_point.extend(1.);
         let coords = projected.xyz() / projected.w;
@@ -178,6 +199,10 @@ fn track_frustum_intersect_system(
         let w1 = points[0].distance_squared(points[3]);
         let w2 = points[1].distance_squared(points[2]);
         intersects.width = w1.max(w2).sqrt();
+
+        if let Some(intersect) = slot {
+            commands.entity(entity).insert(intersect);
+        }
     }
 }
 

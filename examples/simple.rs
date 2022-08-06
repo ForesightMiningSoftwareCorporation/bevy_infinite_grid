@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy_flycam::PlayerPlugin;
-use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
+use bevy_infinite_grid::{InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
 
 fn main() {
     App::new()
@@ -16,7 +16,13 @@ fn setup_system(
     mut meshes: ResMut<Assets<Mesh>>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn_bundle(InfiniteGridBundle::default());
+    commands.spawn_bundle(InfiniteGridBundle {
+        grid: InfiniteGrid {
+            // shadow_color: None,
+            ..Default::default()
+        },
+        ..Default::default()
+    });
 
     commands.spawn_bundle(DirectionalLightBundle {
         transform: Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.)

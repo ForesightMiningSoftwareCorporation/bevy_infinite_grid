@@ -41,7 +41,9 @@ use bevy::{
 
 use crate::GridFrustumIntersect;
 
-use super::{ExtractedInfiniteGrid, InfiniteGridPipeline};
+use super::{
+    ExtractedInfiniteGrid, GridShadowUniformOffset, GridShadowUniforms, InfiniteGridPipeline,
+};
 
 static SHADOW_RENDER: &str = include_str!("shadow_render.wgsl");
 
@@ -324,28 +326,35 @@ pub struct GridShadowBindGroup {
 fn queue_grid_shadow_bind_groups(
     mut commands: Commands,
     grids: Query<(Entity, &GridShadowView)>,
+    uniforms: Res<GridShadowUniforms>,
     infinite_grid_pipeline: Res<InfiniteGridPipeline>,
     grid_shadow_pipeline: Res<GridShadowPipeline>,
     render_device: Res<RenderDevice>,
 ) {
-    for (entity, shadow_view) in grids.iter() {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("grid-shadow-bind-group"),
-            layout: &infinite_grid_pipeline.grid_shadows_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&shadow_view.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&grid_shadow_pipeline.sampler),
-                },
-            ],
-        });
-        commands
-            .entity(entity)
-            .insert(GridShadowBindGroup { bind_group });
+    if let Some(uniform_binding) = uniforms.uniforms.binding() {
+        for (entity, shadow_view) in grids.iter() {
+            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+                label: Some("grid-shadow-bind-group"),
+                layout: &infinite_grid_pipeline.grid_shadows_layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_binding.clone(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(&shadow_view.texture_view),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::Sampler(&grid_shadow_pipeline.sampler),
+                    },
+                ],
+            });
+            commands
+                .entity(entity)
+                .insert(GridShadowBindGroup { bind_group });
+        }
     }
 }
 
@@ -396,7 +405,7 @@ fn queue_grid_shadows(
 pub struct SetGridShadowBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetGridShadowBindGroup<I> {
-    type Param = SQuery<Read<GridShadowBindGroup>>;
+    type Param = SQuery<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
 
     fn render<'w>(
         _view: Entity,
@@ -404,8 +413,9 @@ impl<const I: usize> EntityRenderCommand for SetGridShadowBindGroup<I> {
         query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bg = query.get_inner(item).unwrap();
-        pass.set_bind_group(I, &bg.bind_group, &[]);
+        if let Ok((bg, offset)) = query.get_inner(item) {
+            pass.set_bind_group(I, &bg.bind_group, &[offset.offset]);
+        }
         RenderCommandResult::Success
     }
 }
