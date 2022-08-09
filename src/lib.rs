@@ -118,6 +118,9 @@ pub fn calculate_distant_from(
     grid.translation() + pos_in_3d_gs
 }
 
+#[derive(Component)]
+pub struct GridShadowCamera;
+
 fn track_frustum_intersect_system(
     mut commands: Commands,
     mut grids: Query<(
@@ -126,7 +129,7 @@ fn track_frustum_intersect_system(
         &InfiniteGrid,
         Option<&mut GridFrustumIntersect>,
     )>,
-    camera: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    camera: Query<(&GlobalTransform, &Camera), With<GridShadowCamera>>,
 ) {
     let (cam_pos, cam) = camera.single();
 
