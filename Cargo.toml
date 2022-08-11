@@ -20,5 +20,5 @@ bevy = "0.8"
 [dev-dependencies]
 bevy_flycam = "0.8"
 
-[patch.crates-io]
-bevy = { path = "../bevy" }
+# [patch.crates-io]
+# bevy = { path = "../bevy" }
