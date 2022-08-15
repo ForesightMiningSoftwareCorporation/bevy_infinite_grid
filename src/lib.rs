@@ -131,6 +131,10 @@ fn track_frustum_intersect_system(
     )>,
     camera: Query<(&GlobalTransform, &Camera), With<GridShadowCamera>>,
 ) {
+    if camera.is_empty() {
+        return;
+    }
+
     let (cam_pos, cam) = camera.single();
 
     let view = cam_pos.compute_matrix();
