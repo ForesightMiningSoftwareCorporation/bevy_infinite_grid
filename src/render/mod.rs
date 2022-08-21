@@ -252,11 +252,12 @@ fn extract_infinite_grids(
 
 fn extract_grid_shadows(
     mut commands: Commands,
-    grids: Extract<Query<(Entity, &GridFrustumIntersect)>>,
+    grids: Extract<Query<(Entity, &ExtractedInfiniteGrid, &GridFrustumIntersect)>>,
 ) {
     let extracted: Vec<_> = grids
         .iter()
-        .map(|(entity, intersect)| (entity, (intersect.clone(),)))
+        .filter(|(_, extracted, _)| extracted.grid.shadow_color.is_some())
+        .map(|(entity, _, intersect)| (entity, (intersect.clone(),)))
         .collect();
     commands.insert_or_spawn_batch(extracted);
 }
@@ -307,20 +308,28 @@ fn prepare_grid_shadows(
     for (entity, extracted, intersect) in grids.iter() {
         let transform = extracted.transform;
         let normal = transform.up();
-        commands.entity(entity).insert(GridShadowUniformOffset {
-            offset: uniforms.uniforms.push(GridShadowUniform {
-                shadow_color: Vec4::from_slice(&extracted.grid.shadow_color.unwrap().as_rgba_f32()),
-                shadow_collapse_matrix: Mat3::from_cols(
-                    normal.cross(-intersect.up_dir),
-                    normal,
-                    -intersect.up_dir,
-                )
-                .inverse(),
-                shadow_center_pos: intersect.center,
-                shadow_texture_height: intersect.height,
-                shadow_texture_width: intersect.width,
-            }),
-        });
+
+        // When called after [`extract_grid_shadows()`] has filtered out
+        // [`InfiniteGrid`]s that have shadow_color: None, this is always
+        // true. However, if this is ever called before then the unwrap()
+        // that was here before will crash the program with a panic! that
+        // makes shadow_color: None unusable.
+        if let Some(grid_shadow_color) = extracted.grid.shadow_color {
+            commands.entity(entity).insert(GridShadowUniformOffset {
+                offset: uniforms.uniforms.push(GridShadowUniform {
+                    shadow_color: Vec4::from_slice(&grid_shadow_color.as_rgba_f32()),
+                    shadow_collapse_matrix: Mat3::from_cols(
+                        normal.cross(-intersect.up_dir),
+                        normal,
+                        -intersect.up_dir,
+                    )
+                    .inverse(),
+                    shadow_center_pos: intersect.center,
+                    shadow_texture_height: intersect.height,
+                    shadow_texture_width: intersect.width,
+                }),
+            });
+        }
     }
 
     uniforms
