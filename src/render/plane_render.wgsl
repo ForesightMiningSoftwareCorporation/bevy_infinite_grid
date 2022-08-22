@@ -1,44 +1,53 @@
 struct InfiniteGrid {
-    planar_rotation_matrix: mat3x3<f32>;
-    origin: vec3<f32>;
-    normal: vec3<f32>;
-    scale: f32;
+    planar_rotation_matrix: mat3x3<f32>,
+    origin: vec3<f32>,
+    normal: vec3<f32>,
+    scale: f32,
     // 1 / fadeout_distance
-    fadeout_const: f32;
-    x_axis_col: vec3<f32>;
-    z_axis_col: vec3<f32>;
-    shadow_col: vec4<f32>;
-    minor_line_col: vec4<f32>;
-    major_line_col: vec4<f32>;
+    dist_fadeout_const: f32,
+    dot_fadeout_const: f32,
+    x_axis_col: vec3<f32>,
+    z_axis_col: vec3<f32>,
+    minor_line_col: vec4<f32>,
+    major_line_col: vec4<f32>,
 
-    shadow_collapse_matrix: mat3x3<f32>;
-    shadow_center_pos: vec3<f32>;
-    shadow_texture_width: f32;
-    shadow_texture_height: f32;
+};
+
+struct GridShadow {
+    shadow_col: vec4<f32>,
+    shadow_collapse_matrix: mat3x3<f32>,
+    shadow_center_pos: vec3<f32>,
+    shadow_texture_width: f32,
+    shadow_texture_height: f32,
 };
 
 struct View {
-    projection: mat4x4<f32>;
-    inverse_projection: mat4x4<f32>;
-    view: mat4x4<f32>;
-    inverse_view: mat4x4<f32>;
-    world_position: vec3<f32>;
+    projection: mat4x4<f32>,
+    inverse_projection: mat4x4<f32>,
+    view: mat4x4<f32>,
+    inverse_view: mat4x4<f32>,
+    world_position: vec3<f32>,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> view: View;
 
-[[group(1), binding(0)]]
+@group(1) @binding(0)
 var<uniform> infinite_grid: InfiniteGrid;
 
-[[group(2), binding(0)]]
+#ifdef SHADOWS
+@group(2) @binding(0)
+var<uniform> grid_shadow: GridShadow;
+
+@group(2) @binding(1)
 var grid_shadow_texture: texture_2d<f32>;
 
-[[group(2), binding(1)]]
+@group(2) @binding(2)
 var grid_shadow_sampler: sampler;
+#endif
 
 struct Vertex {
-    [[builtin(vertex_index)]] index: u32;
+    @builtin(vertex_index) index: u32,
 };
 
 fn unproject_point(p: vec3<f32>) -> vec3<f32> {
@@ -47,12 +56,12 @@ fn unproject_point(p: vec3<f32>) -> vec3<f32> {
 }
 
 struct VertexOutput {
-    [[builtin(position)]] clip_position: vec4<f32>;
-    [[location(0)]] near_point: vec3<f32>;
-    [[location(1)]] far_point: vec3<f32>;
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) near_point: vec3<f32>,
+    @location(1) far_point: vec3<f32>,
 };
 
-[[stage(vertex)]]
+@vertex
 fn vertex(vertex: Vertex) -> VertexOutput {
     // 0 1 2 1 2 3
     var grid_plane = array<vec3<f32>, 4>(
@@ -72,11 +81,11 @@ fn vertex(vertex: Vertex) -> VertexOutput {
 }
 
 struct FragmentOutput {
-    [[location(0)]] color: vec4<f32>;
-    [[builtin(frag_depth)]] depth: f32;
+    @location(0) color: vec4<f32>,
+    @builtin(frag_depth) depth: f32,
 };
 
-[[stage(fragment)]]
+@fragment
 fn fragment(in: VertexOutput) -> FragmentOutput {
     let ray_origin = in.near_point;
     let ray_direction = normalize(in.far_point - in.near_point);
@@ -102,8 +111,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     out.depth = clip_depth;
 
-    let grid_pos_relative_to_shadow_center = (infinite_grid.shadow_collapse_matrix * (frag_pos_3d - infinite_grid.shadow_center_pos)).xz;
-    let shadow_size = vec2<f32>(infinite_grid.shadow_texture_width, infinite_grid.shadow_texture_height);
+    #ifdef SHADOWS
+    let grid_pos_relative_to_shadow_center = (grid_shadow.shadow_collapse_matrix * (frag_pos_3d - grid_shadow.shadow_center_pos)).xz;
+    let shadow_size = vec2<f32>(grid_shadow.shadow_texture_width, grid_shadow.shadow_texture_height);
     let offset_location = grid_pos_relative_to_shadow_center / shadow_size;
     let uv = offset_location + vec2<f32>(0.5);
 
@@ -111,8 +121,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let inbounds = 1. - step(1., checks.x + checks.y);
 
     let shadow = textureSample(grid_shadow_texture, grid_shadow_sampler, uv).r;
-
     let shadow2 = 1. - shadow * inbounds;
+    #endif
+
     let scale = infinite_grid.scale;
     let coord = plane_coords * scale; // use the scale variable to set the distance between the lines
     let derivative = fwidth(coord);
@@ -130,7 +141,11 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let base_grid_color = mix(infinite_grid.major_line_col, infinite_grid.minor_line_col, step(1., mg_line));
     let grid_color = vec4<f32>(base_grid_color.rgb, base_grid_color.a * grid_alpha);
 
-    var color = mix(grid_color, infinite_grid.shadow_col, 1. - shadow2);
+    #ifdef SHADOWS
+    var color = mix(grid_color, grid_shadow.shadow_col, 1. - shadow2);
+    #else
+    var color = grid_color;
+    #endif
 
     let z_axis_cond = plane_coords.x > -1.0 * minimumx && plane_coords.x < 1.0 * minimumx;
     let x_axis_cond = plane_coords.y > -1.0 * minimumz && plane_coords.y < 1.0 * minimumz;
@@ -138,9 +153,9 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     color = mix(color, vec4<f32>(infinite_grid.z_axis_col, color.a), f32(z_axis_cond));
     color = mix(color, vec4<f32>(infinite_grid.x_axis_col, color.a), f32(x_axis_cond));
 
-    let dist_fadeout = min(1., 1. - infinite_grid.fadeout_const * real_depth);
+    let dist_fadeout = min(1., 1. - infinite_grid.dist_fadeout_const * real_depth);
     let dot_fadeout = abs(dot(infinite_grid.normal, normalize(view.world_position - frag_pos_3d)));
-    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * step(0.01, dot_fadeout);
+    let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * min(infinite_grid.dot_fadeout_const * dot_fadeout, 1.);
 
     color.a = color.a * alpha_fadeout;
     out.color = color;

@@ -4,7 +4,6 @@ pub use render::RenderSettings;
 
 use bevy::math::{Vec3Swizzles, Vec4Swizzles};
 use bevy::prelude::*;
-use bevy::render::camera::Camera3d;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::{VisibilitySystems, VisibleEntities};
 use bevy::{pbr::NotShadowCaster, render::view::NoFrustumCulling};
@@ -32,10 +31,11 @@ pub struct InfiniteGridSettings {
 pub struct InfiniteGrid {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
-    pub shadow_color: Color,
+    pub shadow_color: Option<Color>,
     pub minor_line_color: Color,
     pub major_line_color: Color,
     pub fadeout_distance: f32,
+    pub dot_fadeout_strength: f32,
 }
 
 impl Default for InfiniteGrid {
@@ -43,10 +43,11 @@ impl Default for InfiniteGrid {
         Self {
             x_axis_color: Color::rgb(1.0, 0.2, 0.2),
             z_axis_color: Color::rgb(0.2, 0.2, 1.0),
-            shadow_color: Color::rgba(0.2, 0.2, 0.2, 0.7),
+            shadow_color: Some(Color::rgba(0.2, 0.2, 0.2, 0.7)),
             minor_line_color: Color::rgb(0.1, 0.1, 0.1),
             major_line_color: Color::rgb(0.25, 0.25, 0.25),
             fadeout_distance: 100.,
+            dot_fadeout_strength: 0.25,
         }
     }
 }
@@ -92,15 +93,17 @@ pub fn calculate_distant_from(
     grid: &GlobalTransform,
     view_distance: f32,
 ) -> Vec3 {
-    let cam_pos = cam.translation;
-    let cam_dir = cam.local_z();
+    let cam_pos = cam.translation();
+    let cam_dir = cam.back();
 
-    let inverse_rot = grid.rotation.inverse();
+    let (_, grid_rot, _) = grid.to_scale_rotation_translation();
 
-    let gs_cam_pos = (inverse_rot * (cam_pos - grid.translation)).xz();
+    let inverse_rot = grid_rot.inverse();
+
+    let gs_cam_pos = (inverse_rot * (cam_pos - grid.translation())).xz();
     let gs_cam_dir = (inverse_rot * cam_dir).xz().normalize();
 
-    let h = (cam_pos - grid.translation).dot(grid.local_y()).abs();
+    let h = (cam_pos - grid.translation()).dot(grid.up()).abs();
     let s = 1. / view_distance;
 
     let f = |d: f32| (1. - d * s) * (h * h + d * d).sqrt() + h * d * s;
@@ -118,28 +121,56 @@ pub fn calculate_distant_from(
     let dist = x;
 
     let pos_in_grid_space = gs_cam_pos - gs_cam_dir * dist;
-    let pos_in_3d_gs = grid.rotation * pos_in_grid_space.extend(0.).xzy();
+    let pos_in_3d_gs = grid_rot * pos_in_grid_space.extend(0.).xzy();
 
-    grid.translation + pos_in_3d_gs
+    grid.translation() + pos_in_3d_gs
 }
 
+#[derive(Component)]
+pub struct GridShadowCamera;
+
 fn track_frustum_intersect_system(
-    mut grids: Query<(&GlobalTransform, &InfiniteGrid, &mut GridFrustumIntersect)>,
-    camera: Query<(&GlobalTransform, &Camera), With<Camera3d>>,
+    mut commands: Commands,
+    mut grids: Query<(
+        Entity,
+        &GlobalTransform,
+        &InfiniteGrid,
+        Option<&mut GridFrustumIntersect>,
+    )>,
+    camera: Query<(&GlobalTransform, &Camera), With<GridShadowCamera>>,
 ) {
+    if camera.is_empty() {
+        return;
+    }
+
     let (cam_pos, cam) = camera.single();
 
     let view = cam_pos.compute_matrix();
     let inverse_view = view.inverse();
-    let reverse_proj = cam.projection_matrix.inverse();
+    let reverse_proj = cam.projection_matrix().inverse();
 
-    for (grid, grid_params, mut intersects) in grids.iter_mut() {
+    for (entity, grid, grid_params, intersects) in grids.iter_mut() {
+        let mut slot = None;
+        let intersects = match (grid_params.shadow_color.is_none(), intersects) {
+            (true, None) => {
+                continue;
+            }
+            (true, Some(_)) => {
+                commands.entity(entity).remove::<GridFrustumIntersect>();
+                continue;
+            }
+            (false, None) => {
+                slot = Some(GridFrustumIntersect::default());
+                slot.as_mut().unwrap()
+            }
+            (false, Some(val)) => val.into_inner(),
+        };
         let distant_point = calculate_distant_from(cam_pos, grid, grid_params.fadeout_distance);
-        let projected = cam.projection_matrix * inverse_view * distant_point.extend(1.);
+        let projected = cam.projection_matrix() * inverse_view * distant_point.extend(1.);
         let coords = projected.xyz() / projected.w;
 
-        let horizon_sign = (cam_pos.translation - grid.translation)
-            .dot(grid.local_y())
+        let horizon_sign = (cam_pos.translation() - grid.translation())
+            .dot(grid.up())
             .signum();
 
         let horizon = (-1.0..1.0)
@@ -155,8 +186,8 @@ fn track_frustum_intersect_system(
             Vec2::new(-1., horizon),
         ];
 
-        let plane_normal = grid.local_y();
-        let plane_origin = grid.translation;
+        let plane_normal = grid.up();
+        let plane_origin = grid.translation();
 
         let points = seeds.map(|sp| {
             let val = view * reverse_proj * sp.extend(1.).extend(1.);
@@ -183,6 +214,10 @@ fn track_frustum_intersect_system(
         let w1 = points[0].distance_squared(points[3]);
         let w2 = points[1].distance_squared(points[2]);
         intersects.width = w1.max(w2).sqrt();
+
+        if let Some(intersect) = slot {
+            commands.entity(entity).insert(intersect);
+        }
     }
 }
 
@@ -202,50 +237,15 @@ fn track_caster_visibility(
         (With<Handle<Mesh>>, Without<NotShadowCaster>),
     >,
 ) {
-    for (mut visibles, grid_transform, grid) in grids.iter_mut() {
-        let inv_rot = grid_transform.rotation.inverse();
-        let project_to_grid = |point: Vec3| (inv_rot * point).xz();
-        let intersecting_point_test = |point: Vec3| {
-            let grid_points = grid.points.map(project_to_grid);
-            grid_points
-                .into_iter()
-                .scan(grid_points[3], |last_point, p| {
-                    let lp = *last_point;
-                    *last_point = p;
-                    Some((lp, p))
-                })
-                .all(|(lp, p)| (p - lp).perp_dot(project_to_grid(point) - lp) > 0.)
-        };
-        for (entity, visibility, mut computed, intersect_testable) in meshes.iter_mut() {
+    for (mut visibles, _grid_transform, _grid) in grids.iter_mut() {
+        visibles.entities.clear();
+        for (entity, visibility, mut computed, _intersect_testable) in meshes.iter_mut() {
             if !visibility.is_visible {
                 continue;
             }
 
-            // TODO: change this so we create a frustum out of grid intersect points instead, then compute intersections against that
-            if let Some((transform, aabb)) = intersect_testable {
-                let matrix = transform.compute_matrix();
-                let min = aabb.center - aabb.half_extents;
-                let max = aabb.center + aabb.half_extents;
-                let points = [
-                    Vec3::new(min.x, min.y, min.z),
-                    Vec3::new(max.x, min.y, min.z),
-                    Vec3::new(min.x, max.y, min.z),
-                    Vec3::new(min.x, min.y, max.z),
-                    Vec3::new(min.x, max.y, max.z),
-                    Vec3::new(max.x, min.y, max.z),
-                    Vec3::new(max.x, max.y, min.z),
-                    Vec3::new(max.x, max.y, max.z),
-                ];
-                let intersect = points
-                    .into_iter()
-                    .map(|point| matrix.transform_point3(point))
-                    .any(intersecting_point_test);
-
-                if !intersect {
-                    // continue;
-                }
-            }
-            computed.is_visible = true;
+            // TODO: add a check here for if the projection of the aabb onto the plane has any overlap with the grid frustum intersect
+            computed.set_visible_in_view();
             visibles.entities.push(entity);
         }
     }

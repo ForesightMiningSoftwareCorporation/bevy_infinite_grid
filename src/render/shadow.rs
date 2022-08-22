@@ -1,5 +1,4 @@
 use bevy::{
-    core::FloatOrd,
     ecs::system::{
         lifetimeless::{Read, SQuery, SRes},
         SystemParamItem,
@@ -18,13 +17,13 @@ use bevy::{
             SetItemPipeline, TrackedRenderPass,
         },
         render_resource::{
-            std140::AsStd140, AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry,
-            BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource,
-            BindingType, BufferBindingType, BufferSize, CachedRenderPipelineId, ColorTargetState,
-            ColorWrites, Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState,
-            Operations, PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
+            AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
+            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
+            BufferBindingType, BufferSize, CachedRenderPipelineId, ColorTargetState, ColorWrites,
+            Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
+            PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
             RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderStages, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+            ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
             SpecializedMeshPipelines, TextureDescriptor, TextureDimension, TextureFormat,
             TextureUsages, TextureView, VertexState,
         },
@@ -36,12 +35,15 @@ use bevy::{
         },
         RenderApp, RenderStage,
     },
+    utils::FloatOrd,
     window::WindowId,
 };
 
 use crate::{GridFrustumIntersect, InfiniteGridSettings};
 
-use super::{ExtractedInfiniteGrid, InfiniteGridPipeline};
+use super::{
+    ExtractedInfiniteGrid, GridShadowUniformOffset, GridShadowUniforms, InfiniteGridPipeline,
+};
 
 static SHADOW_RENDER: &str = include_str!("shadow_render.wgsl");
 
@@ -102,7 +104,7 @@ impl FromWorld for GridShadowPipeline {
                     ty: BindingType::Buffer {
                         ty: BufferBindingType::Uniform,
                         has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(ViewUniform::std140_size_static() as u64),
+                        min_binding_size: BufferSize::new(ViewUniform::min_size().into()),
                     },
                     count: None,
                 },
@@ -168,11 +170,11 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
                 shader: SHADOW_SHADER_HANDLE.typed::<Shader>(),
                 shader_defs,
                 entry_point: "fragment".into(),
-                targets: vec![ColorTargetState {
+                targets: vec![Some(ColorTargetState {
                     format: TextureFormat::R8Unorm,
                     blend: None,
                     write_mask: ColorWrites::RED,
-                }],
+                })],
             }),
             layout: Some(bind_group_layout),
             primitive: PrimitiveState {
@@ -238,7 +240,11 @@ fn prepare_grid_shadow_views(
     windows: Res<ExtractedWindows>,
     settings: Res<RenderSettings>,
 ) {
-    let primary_window = windows.get(&WindowId::primary()).unwrap();
+    let primary_window = if let Some(w) = windows.get(&WindowId::primary()) {
+        w
+    } else {
+        return;
+    };
     let width = primary_window.physical_width;
     let height = primary_window.physical_height;
     let comp = width < height;
@@ -280,14 +286,13 @@ fn prepare_grid_shadow_views(
         commands.entity(entity).insert_bundle((
             ExtractedView {
                 projection: projection.get_projection_matrix(),
-                transform: GlobalTransform::from_translation(
-                    frustum_intersect.center + grid.transform.local_y() * 500.,
+                transform: Transform::from_translation(
+                    frustum_intersect.center + grid.transform.up() * 500.,
                 )
-                .looking_at(frustum_intersect.center, frustum_intersect.up_dir),
+                .looking_at(frustum_intersect.center, frustum_intersect.up_dir)
+                .into(),
                 width,
                 height,
-                near: 0.1,
-                far: 1000.,
             },
             GridShadowView {
                 texture_view: texture.default_view.clone(),
@@ -322,28 +327,35 @@ pub struct GridShadowBindGroup {
 fn queue_grid_shadow_bind_groups(
     mut commands: Commands,
     grids: Query<(Entity, &GridShadowView)>,
+    uniforms: Res<GridShadowUniforms>,
     infinite_grid_pipeline: Res<InfiniteGridPipeline>,
     grid_shadow_pipeline: Res<GridShadowPipeline>,
     render_device: Res<RenderDevice>,
 ) {
-    for (entity, shadow_view) in grids.iter() {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("grid-shadow-bind-group"),
-            layout: &infinite_grid_pipeline.grid_shadows_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: BindingResource::TextureView(&shadow_view.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::Sampler(&grid_shadow_pipeline.sampler),
-                },
-            ],
-        });
-        commands
-            .entity(entity)
-            .insert(GridShadowBindGroup { bind_group });
+    if let Some(uniform_binding) = uniforms.uniforms.binding() {
+        for (entity, shadow_view) in grids.iter() {
+            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+                label: Some("grid-shadow-bind-group"),
+                layout: &infinite_grid_pipeline.grid_shadows_layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_binding.clone(),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: BindingResource::TextureView(&shadow_view.texture_view),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: BindingResource::Sampler(&grid_shadow_pipeline.sampler),
+                    },
+                ],
+            });
+            commands
+                .entity(entity)
+                .insert(GridShadowBindGroup { bind_group });
+        }
     }
 }
 
@@ -394,7 +406,7 @@ fn queue_grid_shadows(
 pub struct SetGridShadowBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetGridShadowBindGroup<I> {
-    type Param = SQuery<Read<GridShadowBindGroup>>;
+    type Param = SQuery<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
 
     fn render<'w>(
         _view: Entity,
@@ -402,8 +414,9 @@ impl<const I: usize> EntityRenderCommand for SetGridShadowBindGroup<I> {
         query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bg = query.get_inner(item).unwrap();
-        pass.set_bind_group(I, &bg.bind_group, &[]);
+        if let Ok((bg, offset)) = query.get_inner(item) {
+            pass.set_bind_group(I, &bg.bind_group, &[offset.offset]);
+        }
         RenderCommandResult::Success
     }
 }
@@ -444,14 +457,14 @@ impl Node for GridShadowPassNode {
                 self.grid_element_query.get_manual(world, entity).unwrap();
             let pass_descriptor = RenderPassDescriptor {
                 label: Some("grid_shadow_pass"),
-                color_attachments: &[RenderPassColorAttachment {
+                color_attachments: &[Some(RenderPassColorAttachment {
                     view: &shadow_view.texture_view,
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color::BLACK.into()),
                         store: true,
                     },
-                }],
+                })],
                 depth_stencil_attachment: None,
             };
 
@@ -510,13 +523,13 @@ pub fn register_shadow(app: &mut App) {
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();
     let draw_3d_graph = graph
-        .get_sub_graph_mut(bevy::core_pipeline::draw_3d_graph::NAME)
+        .get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
         .unwrap();
     draw_3d_graph.add_node(GridShadowPassNode::NAME, grid_shadow_pass_node);
     draw_3d_graph
         .add_node_edge(
             GridShadowPassNode::NAME,
-            bevy::core_pipeline::draw_3d_graph::node::MAIN_PASS,
+            bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
         )
         .unwrap();
 }
