@@ -1,5 +1,7 @@
 mod render;
 
+pub use render::RenderSettings;
+
 use bevy::math::{Vec3Swizzles, Vec4Swizzles};
 use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
@@ -10,6 +12,7 @@ pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<InfiniteGridSettings>();
         render::render_app_builder(app);
         app.add_system_to_stage(CoreStage::PostUpdate, track_frustum_intersect_system)
             .add_system_to_stage(
@@ -17,6 +20,11 @@ impl Plugin for InfiniteGridPlugin {
                 track_caster_visibility.after(VisibilitySystems::CheckVisibility),
             );
     }
+}
+
+#[derive(Default)]
+pub struct InfiniteGridSettings {
+    pub render_settings: RenderSettings,
 }
 
 #[derive(Component, Copy, Clone)]

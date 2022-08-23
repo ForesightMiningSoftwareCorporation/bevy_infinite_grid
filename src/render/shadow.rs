@@ -39,7 +39,7 @@ use bevy::{
     window::WindowId,
 };
 
-use crate::GridFrustumIntersect;
+use crate::{GridFrustumIntersect, InfiniteGridSettings};
 
 use super::{
     ExtractedInfiniteGrid, GridShadowUniformOffset, GridShadowUniforms, InfiniteGridPipeline,
@@ -238,6 +238,7 @@ fn prepare_grid_shadow_views(
     render_device: Res<RenderDevice>,
     mut texture_cache: ResMut<TextureCache>,
     windows: Res<ExtractedWindows>,
+    settings: Res<RenderSettings>,
 ) {
     let primary_window = if let Some(w) = windows.get(&WindowId::primary()) {
         w
@@ -253,7 +254,7 @@ fn prepare_grid_shadow_views(
         [height, width]
     };
     let ratio = min as f32 / max as f32;
-    let tmax = 16384u32;
+    let tmax = settings.max_texture_size;
     let tmin = (tmax as f32 * ratio) as u32;
     let [width, height] = if comp { [tmin, tmax] } else { [tmax, tmin] };
     for (entity, grid, frustum_intersect) in grids.iter() {
@@ -483,10 +484,25 @@ impl Node for GridShadowPassNode {
     }
 }
 
+#[derive(Clone)]
+pub struct RenderSettings {
+    pub max_texture_size: u32,
+}
+
+impl Default for RenderSettings {
+    fn default() -> Self {
+        Self {
+            max_texture_size: 16384,
+        }
+    }
+}
+
 pub fn register_shadow(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
         .set_untracked(SHADOW_SHADER_HANDLE, Shader::from_wgsl(SHADOW_RENDER));
+
+    let render_settings = app.world.resource::<InfiniteGridSettings>().render_settings.clone();
 
     let render_app = app.get_sub_app_mut(RenderApp).unwrap();
     render_app
@@ -494,6 +510,7 @@ pub fn register_shadow(app: &mut App) {
         .init_resource::<GridShadowPipeline>()
         .init_resource::<DrawFunctions<GridShadow>>()
         .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>()
+        .insert_resource(render_settings)
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
         .add_system_to_stage(
             RenderStage::Prepare,
