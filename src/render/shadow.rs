@@ -509,7 +509,8 @@ pub fn register_shadow(app: &mut App) {
         .init_resource::<GridShadowMeta>()
         .init_resource::<GridShadowPipeline>()
         .init_resource::<DrawFunctions<GridShadow>>()
-        .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>().insert_resource(render_settings)
+        .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>()
+        .insert_resource(render_settings)
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
         .add_system_to_stage(
             RenderStage::Prepare,
