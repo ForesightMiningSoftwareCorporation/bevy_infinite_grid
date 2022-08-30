@@ -349,7 +349,11 @@ fn queue_infinite_grids(
     render_device: Res<RenderDevice>,
     infinite_grids: Query<&ExtractedInfiniteGrid>,
     intersects: Query<&GridFrustumIntersect>,
-    mut views: Query<(&VisibleEntities, &mut RenderPhase<Transparent3d>)>,
+    mut views: Query<(
+        &VisibleEntities,
+        &mut RenderPhase<Transparent3d>,
+        &ExtractedView,
+    )>,
 ) {
     let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
         label: Some("infinite-grid-bind-group"),
@@ -377,9 +381,13 @@ fn queue_infinite_grids(
         GridPipelineKey { has_shadows: true },
     );
 
-    for (entities, mut phase) in views.iter_mut() {
+    for (entities, mut phase, view) in views.iter_mut() {
         for &entity in &entities.entities {
-            if infinite_grids.contains(entity) {
+            if infinite_grids
+                .get(entity)
+                .map(|grid| plane_check(&grid.transform, view.transform.translation()))
+                .unwrap_or(false)
+            {
                 phase.items.push(Transparent3d {
                     pipeline: match intersects.contains(entity) {
                         true => shadow_pipeline,
@@ -392,6 +400,10 @@ fn queue_infinite_grids(
             }
         }
     }
+}
+
+fn plane_check(plane: &GlobalTransform, point: Vec3) -> bool {
+    plane.up().dot(plane.translation() - point).abs() > f32::EPSILON
 }
 
 type DrawInfiniteGrid = (
