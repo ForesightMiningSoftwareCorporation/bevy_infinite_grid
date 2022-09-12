@@ -213,19 +213,20 @@ fn queue_grid_view_bind_groups(
     pipeline: Res<InfiniteGridPipeline>,
     views: Query<Entity, With<GridViewUniformOffset>>,
 ) {
-    let binding = uniforms.uniforms.binding().unwrap();
-    for entity in views.iter() {
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("grid-view-bind-group"),
-            layout: &pipeline.view_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: binding.clone(),
-            }],
-        });
-        commands
-            .entity(entity)
-            .insert(GridViewBindGroup { value: bind_group });
+    if let Some(binding) = uniforms.uniforms.binding() {
+        for entity in views.iter() {
+            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+                label: Some("grid-view-bind-group"),
+                layout: &pipeline.view_layout,
+                entries: &[BindGroupEntry {
+                    binding: 0,
+                    resource: binding.clone(),
+                }],
+            });
+            commands
+                .entity(entity)
+                .insert(GridViewBindGroup { value: bind_group });
+        }
     }
 }
 
@@ -355,14 +356,18 @@ fn queue_infinite_grids(
         &ExtractedView,
     )>,
 ) {
-    let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-        label: Some("infinite-grid-bind-group"),
-        layout: &pipeline.infinite_grid_layout,
-        entries: &[BindGroupEntry {
-            binding: 0,
-            resource: uniforms.uniforms.binding().unwrap(),
-        }],
-    });
+    let bind_group = if let Some(binding) = uniforms.uniforms.binding() {
+        render_device.create_bind_group(&BindGroupDescriptor {
+            label: Some("infinite-grid-bind-group"),
+            layout: &pipeline.infinite_grid_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: binding.clone(),
+            }],
+        })
+    } else {
+        return;
+    };
     commands.insert_resource(InfiniteGridBindGroup { value: bind_group });
 
     let draw_function_id = transparent_draw_functions
