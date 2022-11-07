@@ -485,7 +485,7 @@ impl Node for GridShadowPassNode {
     }
 }
 
-#[derive(Resource, Clone)]
+#[derive(Reflect, Resource, Clone)]
 pub struct RenderSettings {
     pub max_texture_size: u32,
 }

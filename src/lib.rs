@@ -12,7 +12,11 @@ pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<InfiniteGridSettings>();
+        app.init_resource::<InfiniteGridSettings>()
+            .register_type::<InfiniteGridSettings>()
+            .register_type::<RenderSettings>()
+            .register_type::<InfiniteGrid>()
+            .register_type::<InfiniteGridSettings>();
         render::render_app_builder(app);
         app.add_system_to_stage(CoreStage::PostUpdate, track_frustum_intersect_system)
             .add_system_to_stage(
@@ -22,12 +26,14 @@ impl Plugin for InfiniteGridPlugin {
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Reflect, Resource, Default)]
+#[reflect(Resource)]
 pub struct InfiniteGridSettings {
     pub render_settings: RenderSettings,
 }
 
-#[derive(Component, Copy, Clone)]
+#[derive(Reflect, Component, Copy, Clone)]
+#[reflect(Component)]
 pub struct InfiniteGrid {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
