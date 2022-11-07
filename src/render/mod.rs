@@ -76,12 +76,12 @@ pub struct GridShadowUniform {
     shadow_texture_height: f32,
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 struct InfiniteGridUniforms {
     uniforms: DynamicUniformBuffer<InfiniteGridUniform>,
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 struct GridShadowUniforms {
     uniforms: DynamicUniformBuffer<GridShadowUniform>,
 }
@@ -96,6 +96,7 @@ pub struct GridShadowUniformOffset {
     offset: u32,
 }
 
+#[derive(Resource)]
 struct InfiniteGridBindGroup {
     value: BindGroup,
 }
@@ -109,7 +110,7 @@ pub struct GridViewUniform {
     world_position: Vec3,
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct GridViewUniforms {
     uniforms: DynamicUniformBuffer<GridViewUniform>,
 }
@@ -419,6 +420,7 @@ type DrawInfiniteGrid = (
     FinishDrawInfiniteGrid,
 );
 
+#[derive(Resource)]
 struct InfiniteGridPipeline {
     view_layout: BindGroupLayout,
     infinite_grid_layout: BindGroupLayout,
