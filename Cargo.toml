@@ -19,7 +19,7 @@ bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, f
 
 [dev-dependencies]
 bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = ["bevy_winit", "x11"] }
-bevy_flycam = "0.8"
+# bevy_flycam = "0.8"
 
 # [patch.crates-io]
 # bevy = { path = "../bevy" }

@@ -1,12 +1,12 @@
 use bevy::prelude::*;
-use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
+// use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_infinite_grid::{GridShadowCamera, InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugin(InfiniteGridPlugin)
-        .add_plugin(NoCameraPlayerPlugin)
+        // .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(setup_system)
         .run();
 }
@@ -29,7 +29,7 @@ fn setup_system(
             transform: Transform::from_xyz(0.0, 4.37, 14.77),
             ..Default::default()
         })
-        .insert(FlyCam)
+        // .insert(FlyCam)
         .insert(GridShadowCamera);
 
     commands.spawn_bundle(DirectionalLightBundle {
