@@ -26,7 +26,7 @@ fn setup_system(
 
     commands
         .spawn_bundle(Camera3dBundle {
-            transform: Transform::from_xyz(1., 0., 1.),
+            transform: Transform::from_xyz(0.0, 4.37, 14.77),
             ..Default::default()
         })
         .insert(FlyCam)
