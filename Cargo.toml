@@ -1,6 +1,6 @@
 [package]
 name = "bevy_infinite_grid"
-version = "0.5.2"
+version = "0.6.0"
 authors = [
     "Nile <therawmeatball@gmail.com>",
     "Foresight Mining Software Corporation",
