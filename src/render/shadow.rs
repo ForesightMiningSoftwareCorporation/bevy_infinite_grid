@@ -83,6 +83,7 @@ impl CachedRenderPipelinePhaseItem for GridShadow {
     }
 }
 
+#[derive(Resource)]
 pub struct GridShadowPipeline {
     pub view_layout: BindGroupLayout,
     pub mesh_layout: BindGroupLayout,
@@ -193,7 +194,7 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
     }
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 struct GridShadowMeta {
     view_bind_group: Option<BindGroup>,
 }
@@ -283,7 +284,7 @@ fn prepare_grid_shadow_views(
             ..Default::default()
         };
 
-        commands.entity(entity).insert_bundle((
+        commands.entity(entity).insert((
             ExtractedView {
                 projection: projection.get_projection_matrix(),
                 transform: Transform::from_translation(
@@ -291,8 +292,8 @@ fn prepare_grid_shadow_views(
                 )
                 .looking_at(frustum_intersect.center, frustum_intersect.up_dir)
                 .into(),
-                width,
-                height,
+                hdr: false,
+                viewport: UVec4::new(0, 0, width, height),
             },
             GridShadowView {
                 texture_view: texture.default_view.clone(),
@@ -484,7 +485,7 @@ impl Node for GridShadowPassNode {
     }
 }
 
-#[derive(Clone)]
+#[derive(Resource, Clone)]
 pub struct RenderSettings {
     pub max_texture_size: u32,
 }
@@ -502,7 +503,11 @@ pub fn register_shadow(app: &mut App) {
         .resource_mut::<Assets<Shader>>()
         .set_untracked(SHADOW_SHADER_HANDLE, Shader::from_wgsl(SHADOW_RENDER));
 
-    let render_settings = app.world.resource::<InfiniteGridSettings>().render_settings.clone();
+    let render_settings = app
+        .world
+        .resource::<InfiniteGridSettings>()
+        .render_settings
+        .clone();
 
     let render_app = app.get_sub_app_mut(RenderApp).unwrap();
     render_app
@@ -515,7 +520,7 @@ pub fn register_shadow(app: &mut App) {
         .add_system_to_stage(
             RenderStage::Prepare,
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
-            prepare_grid_shadow_views.exclusive_system().at_start(),
+            prepare_grid_shadow_views.at_start(),
         )
         .add_system_to_stage(RenderStage::Queue, queue_grid_shadows)
         .add_system_to_stage(RenderStage::Queue, queue_grid_shadow_bind_groups)

@@ -22,7 +22,7 @@ impl Plugin for InfiniteGridPlugin {
     }
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct InfiniteGridSettings {
     pub render_settings: RenderSettings,
 }
