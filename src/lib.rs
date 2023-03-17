@@ -14,10 +14,11 @@ impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InfiniteGridSettings>();
         render::render_app_builder(app);
-        app.add_system_to_stage(CoreStage::PostUpdate, track_frustum_intersect_system)
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                track_caster_visibility.after(VisibilitySystems::CheckVisibility),
+        app
+            .add_system(track_frustum_intersect_system.in_base_set(CoreSet::PostUpdate))
+            .add_system(track_caster_visibility
+                .in_base_set(CoreSet::PostUpdate)
+                .after(VisibilitySystems::CheckVisibility)
             );
     }
 }
@@ -240,7 +241,7 @@ fn track_caster_visibility(
     for (mut visibles, _grid_transform, _grid) in grids.iter_mut() {
         visibles.entities.clear();
         for (entity, visibility, mut computed, _intersect_testable) in meshes.iter_mut() {
-            if !visibility.is_visible {
+            if let Visibility::Hidden = visibility {
                 continue;
             }
 
