@@ -6,9 +6,12 @@ use std::borrow::Cow;
 
 use bevy::{
     core_pipeline::core_3d::Transparent3d,
-    ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
-        SystemParamItem,
+    ecs::{
+        query::ROQueryItem,
+        system::{
+            lifetimeless::{Read, SRes},
+            SystemParamItem,
+        }
     },
     prelude::*,
     reflect::TypeUuid,
@@ -128,18 +131,18 @@ struct GridViewBindGroup {
 struct SetGridViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridViewBindGroup<I> {
-    type Param = SQuery<(Read<GridViewUniformOffset>, Read<GridViewBindGroup>)>;
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = Entity;
+    type Param = ();
+    type ViewWorldQuery = (Read<GridViewUniformOffset>, Read<GridViewBindGroup>);
+    type ItemWorldQuery = ();
 
+    #[inline]
     fn render<'w>(
         _item: &P,
-        view: Entity,
-        _entity: Entity,
-        param: SystemParamItem<'w, '_, Self::Param>,
+        (view_uniform, bind_group): ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (view_uniform, bind_group) = param.get_inner(view).unwrap();
         pass.set_bind_group(I, &bind_group.value, &[view_uniform.offset]);
 
         RenderCommandResult::Success
@@ -149,21 +152,18 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridViewBindGroup<I> 
 struct SetInfiniteGridBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetInfiniteGridBindGroup<I> {
-    type Param = (
-        SRes<InfiniteGridBindGroup>,
-        SQuery<Read<InfiniteGridUniformOffset>>,
-    );
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = Entity;
+    type Param = SRes<InfiniteGridBindGroup>;
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = Read<InfiniteGridUniformOffset>;
 
+    #[inline]
     fn render<'w>(
         _item: &P,
-        _view: Entity,
-        entity: Entity,
-        (bind_group, query): SystemParamItem<'w, '_, Self::Param>,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        offset: ROQueryItem<'w, Self::ItemWorldQuery>,
+        bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let offset = query.get_inner(entity).unwrap();
         pass.set_bind_group(I, &bind_group.into_inner().value, &[offset.offset]);
         RenderCommandResult::Success
     }
@@ -173,13 +173,14 @@ struct FinishDrawInfiniteGrid;
 
 impl<P: PhaseItem> RenderCommand<P> for FinishDrawInfiniteGrid {
     type Param = ();
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = Entity;
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = ();
 
+    #[inline]
     fn render<'w>(
         _item: &P,
-        _view: Entity,
-        _entity: Entity,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
         _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

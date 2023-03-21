@@ -1,9 +1,12 @@
 use bevy::{
-    ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
-        SystemParamItem,
+    ecs::{
+        query::ROQueryItem,
+        system::{
+            lifetimeless::{Read, SRes},
+            SystemParamItem,
+        }
     },
-    pbr::{DrawMesh, MeshPipeline, MeshPipelineKey, NotShadowCaster, SetMeshBindGroup},
+    pbr::{DrawMesh, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS, MeshPipeline, MeshPipelineKey, NotShadowCaster, SetMeshBindGroup},
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -23,7 +26,7 @@ use bevy::{
             Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
             PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
             RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
             SpecializedMeshPipelines, TextureDescriptor, TextureDimension, TextureFormat,
             TextureUsages, TextureView, VertexState,
         },
@@ -58,6 +61,7 @@ pub struct GridShadow {
 impl PhaseItem for GridShadow {
     type SortKey = FloatOrd;
 
+    #[inline]
     fn entity(&self) -> Entity {
         self.entity
     }
@@ -142,7 +146,16 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
         let mut vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
 
         let mut bind_group_layout = vec![self.view_layout.clone()];
-        let mut shader_defs = Vec::new();
+        let mut shader_defs = vec![
+            ShaderDefVal::Int(
+                "MAX_DIRECTIONAL_LIGHTS".to_string(),
+                MAX_DIRECTIONAL_LIGHTS as i32,
+            ),
+            ShaderDefVal::Int(
+                "MAX_CASCADES_PER_LIGHT".to_string(),
+                MAX_CASCADES_PER_LIGHT as i32,
+            )
+        ];
 
         if layout.contains(Mesh::ATTRIBUTE_JOINT_INDEX)
             && layout.contains(Mesh::ATTRIBUTE_JOINT_WEIGHT)
@@ -207,18 +220,18 @@ type DrawGridShadowMesh = (
 struct SetGridShadowViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowViewBindGroup<I> {
-    type Param = (SRes<GridShadowMeta>, SQuery<Read<ViewUniformOffset>>);
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = Entity;
+    type Param = SRes<GridShadowMeta>;
+    type ViewWorldQuery = Read<ViewUniformOffset>;
+    type ItemWorldQuery = ();
 
+    #[inline]
     fn render<'w>(
         _item: &P,
-        view: Entity,
-        _entity: Entity,
-        (meta, query): SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
+        view_uniform_offset: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        meta: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let view_uniform_offset = query.get(view).unwrap();
         pass.set_bind_group(
             I,
             meta.into_inner().view_bind_group.as_ref().unwrap(),
@@ -414,18 +427,19 @@ fn queue_grid_shadows(
 pub struct SetGridShadowBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowBindGroup<I> {
-    type Param = SQuery<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = Entity;
+    type Param = ();
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = Option<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
 
+    #[inline]
     fn render<'w>(
         _item: &P,
-        _view: Entity,
-        entity: Entity,
-        query: SystemParamItem<'w, '_, Self::Param>,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        bg_offset: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if let Ok((bg, offset)) = query.get_inner(entity) {
+        if let Some((bg, offset)) = bg_offset {
             pass.set_bind_group(I, &bg.bind_group, &[offset.offset]);
         }
         RenderCommandResult::Success
