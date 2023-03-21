@@ -17,7 +17,7 @@ use bevy::{
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
             PhaseItem, RenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            SetItemPipeline,
         },
         render_resource::{
             AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
