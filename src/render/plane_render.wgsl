@@ -133,8 +133,8 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let minimumz = min(derivative.y, 1.) / scale;
     let minimumx = min(derivative.x, 1.) / scale;
 
-    let derivative = fwidth(coord * 0.1);
-    let grid2 = abs(fract((coord * 0.1) - 0.5) - 0.5) / derivative;
+    let derivative2 = fwidth(coord * 0.1);
+    let grid2 = abs(fract((coord * 0.1) - 0.5) - 0.5) / derivative2;
     let mg_line = min(grid2.x, grid2.y);
 
     let grid_alpha = 1.0 - min(lne, 1.0);
