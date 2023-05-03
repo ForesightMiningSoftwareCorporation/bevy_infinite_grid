@@ -1,9 +1,12 @@
 use bevy::{
-    ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
-        SystemParamItem,
+    ecs::{
+        query::ROQueryItem,
+        system::{
+            lifetimeless::{Read, SRes},
+            SystemParamItem,
+        }
     },
-    pbr::{DrawMesh, MeshPipeline, NotShadowCaster, SetMeshBindGroup, ShadowPipelineKey},
+    pbr::{DrawMesh, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS, MeshPipeline, MeshPipelineKey, NotShadowCaster, SetMeshBindGroup},
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -13,8 +16,8 @@ use bevy::{
         render_graph::{Node, RenderGraph},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
-            EntityPhaseItem, EntityRenderCommand, PhaseItem, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            PhaseItem, RenderCommand, RenderCommandResult, RenderPhase,
+            SetItemPipeline,
         },
         render_resource::{
             AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -23,7 +26,7 @@ use bevy::{
             Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
             PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
             RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
             SpecializedMeshPipelines, TextureDescriptor, TextureDimension, TextureFormat,
             TextureUsages, TextureView, VertexState,
         },
@@ -33,10 +36,9 @@ use bevy::{
             ExtractedView, ExtractedWindows, ViewUniform, ViewUniformOffset, ViewUniforms,
             VisibleEntities,
         },
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
     utils::FloatOrd,
-    window::WindowId,
 };
 
 use crate::{GridFrustumIntersect, InfiniteGridSettings};
@@ -60,6 +62,11 @@ impl PhaseItem for GridShadow {
     type SortKey = FloatOrd;
 
     #[inline]
+    fn entity(&self) -> Entity {
+        self.entity
+    }
+
+    #[inline]
     fn sort_key(&self) -> Self::SortKey {
         unimplemented!("grid shadows don't need sorting")
     }
@@ -67,12 +74,6 @@ impl PhaseItem for GridShadow {
     #[inline]
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
-    }
-}
-
-impl EntityPhaseItem for GridShadow {
-    fn entity(&self) -> Entity {
-        self.entity
     }
 }
 
@@ -135,7 +136,7 @@ impl FromWorld for GridShadowPipeline {
 }
 
 impl SpecializedMeshPipeline for GridShadowPipeline {
-    type Key = ShadowPipelineKey;
+    type Key = MeshPipelineKey;
 
     fn specialize(
         &self,
@@ -145,12 +146,21 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
         let mut vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
 
         let mut bind_group_layout = vec![self.view_layout.clone()];
-        let mut shader_defs = Vec::new();
+        let mut shader_defs = vec![
+            ShaderDefVal::Int(
+                "MAX_DIRECTIONAL_LIGHTS".to_string(),
+                MAX_DIRECTIONAL_LIGHTS as i32,
+            ),
+            ShaderDefVal::Int(
+                "MAX_CASCADES_PER_LIGHT".to_string(),
+                MAX_CASCADES_PER_LIGHT as i32,
+            )
+        ];
 
         if layout.contains(Mesh::ATTRIBUTE_JOINT_INDEX)
             && layout.contains(Mesh::ATTRIBUTE_JOINT_WEIGHT)
         {
-            shader_defs.push(String::from("SKINNED"));
+            shader_defs.push("SKINNED".into());
             vertex_attributes.push(Mesh::ATTRIBUTE_JOINT_INDEX.at_shader_location(4));
             vertex_attributes.push(Mesh::ATTRIBUTE_JOINT_WEIGHT.at_shader_location(5));
             bind_group_layout.push(self.skinned_mesh_layout.clone());
@@ -177,7 +187,8 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
                     write_mask: ColorWrites::RED,
                 })],
             }),
-            layout: Some(bind_group_layout),
+            layout: bind_group_layout,
+            push_constant_ranges: Vec::new(),
             primitive: PrimitiveState {
                 topology: key.primitive_topology(),
                 strip_index_format: None,
@@ -208,16 +219,19 @@ type DrawGridShadowMesh = (
 
 struct SetGridShadowViewBindGroup<const I: usize>;
 
-impl<const I: usize> EntityRenderCommand for SetGridShadowViewBindGroup<I> {
-    type Param = (SRes<GridShadowMeta>, SQuery<Read<ViewUniformOffset>>);
+impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowViewBindGroup<I> {
+    type Param = SRes<GridShadowMeta>;
+    type ViewWorldQuery = Read<ViewUniformOffset>;
+    type ItemWorldQuery = ();
 
+    #[inline]
     fn render<'w>(
-        view: Entity,
-        _item: Entity,
-        (meta, query): SystemParamItem<'w, '_, Self::Param>,
-        pass: &mut TrackedRenderPass<'w>,
+        _item: &P,
+        view_uniform_offset: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        meta: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let view_uniform_offset = query.get(view).unwrap();
         pass.set_bind_group(
             I,
             meta.into_inner().view_bind_group.as_ref().unwrap(),
@@ -241,7 +255,7 @@ fn prepare_grid_shadow_views(
     windows: Res<ExtractedWindows>,
     settings: Res<RenderSettings>,
 ) {
-    let primary_window = if let Some(w) = windows.get(&WindowId::primary()) {
+    let primary_window = if let Some(w) = windows.primary.as_ref().and_then(|id| windows.get(id)) {
         w
     } else {
         return;
@@ -273,14 +287,18 @@ fn prepare_grid_shadow_views(
                 dimension: TextureDimension::D2,
                 format: TextureFormat::R8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                view_formats: &[]
             },
         );
 
         let projection = OrthographicProjection {
-            bottom: frustum_intersect.height / -2.,
-            top: frustum_intersect.height / 2.,
-            left: frustum_intersect.width / -2.,
-            right: frustum_intersect.width / 2.,
+            area: Rect::new(
+                // left, bottom, right, top
+                frustum_intersect.width / -2.,
+                frustum_intersect.height / -2.,
+                frustum_intersect.width / 2.,
+                frustum_intersect.height / 2.
+            ),
             ..Default::default()
         };
 
@@ -292,8 +310,10 @@ fn prepare_grid_shadow_views(
                 )
                 .looking_at(frustum_intersect.center, frustum_intersect.up_dir)
                 .into(),
+                view_projection: None,
                 hdr: false,
                 viewport: UVec4::new(0, 0, width, height),
+                color_grading: Default::default()
             },
             GridShadowView {
                 texture_view: texture.default_view.clone(),
@@ -377,7 +397,7 @@ fn queue_grid_shadows(
         for &entity in &entities.entities {
             if let Ok(mesh_handle) = casting_meshes.get(entity) {
                 if let Some(mesh) = render_meshes.get(mesh_handle) {
-                    let key = ShadowPipelineKey::from_primitive_topology(mesh.primitive_topology);
+                    let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
                     let pipeline_id = pipelines.specialize(
                         &mut pipeline_cache,
                         &shadow_pipeline,
@@ -406,16 +426,20 @@ fn queue_grid_shadows(
 
 pub struct SetGridShadowBindGroup<const I: usize>;
 
-impl<const I: usize> EntityRenderCommand for SetGridShadowBindGroup<I> {
-    type Param = SQuery<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
+impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowBindGroup<I> {
+    type Param = ();
+    type ViewWorldQuery = ();
+    type ItemWorldQuery = Option<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
 
+    #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
-        query: SystemParamItem<'w, '_, Self::Param>,
+        _item: &P,
+        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        bg_offset: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        if let Ok((bg, offset)) = query.get_inner(item) {
+        if let Some((bg, offset)) = bg_offset {
             pass.set_bind_group(I, &bg.bind_group, &[offset.offset]);
         }
         RenderCommandResult::Success
@@ -470,14 +494,12 @@ impl Node for GridShadowPassNode {
             };
 
             let draw_functions = world.resource::<DrawFunctions<GridShadow>>();
-            let render_pass = render_context
-                .command_encoder
-                .begin_render_pass(&pass_descriptor);
+            let mut tracked_render_pass = render_context
+                .begin_tracked_render_pass(pass_descriptor);
             let mut draw_functions = draw_functions.write();
-            let mut tracked_pass = TrackedRenderPass::new(render_pass);
             for item in &render_phase.items {
                 let draw_function = draw_functions.get_mut(item.draw_function).unwrap();
-                draw_function.draw(world, &mut tracked_pass, entity, item);
+                draw_function.draw(world, &mut tracked_render_pass, entity, item);
             }
         }
 
@@ -517,14 +539,13 @@ pub fn register_shadow(app: &mut App) {
         .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>()
         .insert_resource(render_settings)
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
-        .add_system_to_stage(
-            RenderStage::Prepare,
+        .add_system(
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
-            prepare_grid_shadow_views.at_start(),
+            prepare_grid_shadow_views.in_set(RenderSet::Prepare),
         )
-        .add_system_to_stage(RenderStage::Queue, queue_grid_shadows)
-        .add_system_to_stage(RenderStage::Queue, queue_grid_shadow_bind_groups)
-        .add_system_to_stage(RenderStage::Queue, queue_grid_shadow_view_bind_group);
+        .add_system(queue_grid_shadows.in_set(RenderSet::Queue))
+        .add_system(queue_grid_shadow_bind_groups.in_set(RenderSet::Queue))
+        .add_system(queue_grid_shadow_view_bind_group.in_set(RenderSet::Queue));
 
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();
@@ -536,6 +557,5 @@ pub fn register_shadow(app: &mut App) {
         .add_node_edge(
             GridShadowPassNode::NAME,
             bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
-        )
-        .unwrap();
+        );
 }

@@ -1,6 +1,6 @@
 [package]
 name = "bevy_infinite_grid"
-version = "0.6.0"
+version = "0.7.0"
 authors = [
     "Nile <therawmeatball@gmail.com>",
     "Foresight Mining Software Corporation",
@@ -15,11 +15,11 @@ keywords = ["bevy"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.9", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_asset"] }
+bevy = { version = "0.10.0", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_asset"] }
 
 [dev-dependencies]
-bevy = { version = "0.9", default-features = false, features = ["bevy_winit", "x11"] }
-bevy_flycam = "0.9"
+bevy = { version = "0.10.0", default-features = false, features = ["bevy_winit", "x11"] }
+bevy_flycam = "0.10.0"
 
 # [patch.crates-io]
 # bevy = { path = "../bevy" }
