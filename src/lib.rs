@@ -14,11 +14,11 @@ impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InfiniteGridSettings>();
         render::render_app_builder(app);
-        app
-            .add_system(track_frustum_intersect_system.in_base_set(CoreSet::PostUpdate))
-            .add_system(track_caster_visibility
-                .in_base_set(CoreSet::PostUpdate)
-                .after(VisibilitySystems::CheckVisibility)
+        app.add_system(track_frustum_intersect_system.in_base_set(CoreSet::PostUpdate))
+            .add_system(
+                track_caster_visibility
+                    .in_base_set(CoreSet::PostUpdate)
+                    .after(VisibilitySystems::CheckVisibility),
             );
     }
 }
