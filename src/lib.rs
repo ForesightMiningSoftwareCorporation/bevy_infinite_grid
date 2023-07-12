@@ -13,6 +13,9 @@ pub struct InfiniteGridPlugin;
 impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<InfiniteGridSettings>();
+    }
+
+    fn finish(&self, app: &mut App) {
         render::render_app_builder(app);
         app
             .add_systems(PostUpdate, track_frustum_intersect_system)
