@@ -12,8 +12,7 @@ use bevy::{pbr::NotShadowCaster, render::view::NoFrustumCulling};
 pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<InfiniteGridSettings>();
+    fn build(&self, _app: &mut App) {
     }
 
     fn finish(&self, app: &mut App) {
@@ -21,6 +20,7 @@ impl Plugin for InfiniteGridPlugin {
             return
         };
 
+        render_app.init_resource::<InfiniteGridSettings>();
         render::render_app_builder(render_app);
         render_app
             .add_systems(PostUpdate, track_frustum_intersect_system)
