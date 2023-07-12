@@ -4,7 +4,6 @@ pub use render::RenderSettings;
 
 use bevy::math::{Vec3Swizzles, Vec4Swizzles};
 use bevy::prelude::*;
-use bevy::render::RenderApp;
 use bevy::render::primitives::Aabb;
 use bevy::render::view::{VisibilitySystems, VisibleEntities};
 use bevy::{pbr::NotShadowCaster, render::view::NoFrustumCulling};
@@ -12,17 +11,13 @@ use bevy::{pbr::NotShadowCaster, render::view::NoFrustumCulling};
 pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
-    fn build(&self, _app: &mut App) {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<InfiniteGridSettings>();
     }
 
     fn finish(&self, app: &mut App) {
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
-            return
-        };
-
-        render_app.init_resource::<InfiniteGridSettings>();
-        render::render_app_builder(render_app);
-        render_app
+        render::render_app_builder(app);
+        app
             .add_systems(PostUpdate, track_frustum_intersect_system)
             .add_systems(PostUpdate, track_caster_visibility
                 .after(VisibilitySystems::CheckVisibility)

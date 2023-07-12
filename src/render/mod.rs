@@ -588,7 +588,10 @@ pub fn render_app_builder(app: &mut App) {
         .resource_mut::<Assets<Shader>>()
         .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, PLANE_RENDER));
 
-    let render_app = app.get_sub_app_mut(RenderApp).unwrap();
+    let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        return
+    };
+
     render_app
         .init_resource::<GridViewUniforms>()
         .init_resource::<InfiniteGridUniforms>()
