@@ -586,7 +586,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
 pub fn render_app_builder(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER));
+        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, PLANE_RENDER));
 
     let render_app = app.get_sub_app_mut(RenderApp).unwrap();
     render_app
