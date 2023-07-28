@@ -603,11 +603,19 @@ pub fn render_app_builder(app: &mut App) {
         .add_systems(ExtractSchedule, extract_grid_shadows
             .before(extract_infinite_grids) // order to minimize move overhead
         )
-        .add_systems(Render, prepare_infinite_grids.in_set(RenderSet::Prepare))
-        .add_systems(Render, prepare_grid_shadows.in_set(RenderSet::Prepare))
-        .add_systems(Render, prepare_grid_view_bind_groups.in_set(RenderSet::Prepare))
-        .add_systems(Render, queue_infinite_grids.in_set(RenderSet::Queue))
-        .add_systems(Render, queue_grid_view_bind_groups.in_set(RenderSet::Queue));
+        .add_systems(
+            Render,
+            (
+                prepare_infinite_grids,
+                prepare_grid_shadows,
+                prepare_grid_view_bind_groups
+            ).in_set(RenderSet::Prepare))
+        .add_systems(
+            Render,
+            (
+                queue_infinite_grids,
+                queue_grid_view_bind_groups
+            ).in_set(RenderSet::Queue));
 
     shadow::register_shadow(app);
 }
