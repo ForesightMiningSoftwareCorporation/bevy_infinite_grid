@@ -554,6 +554,6 @@ pub fn register_shadow(app: &mut App) {
     draw_3d_graph
         .add_node_edge(
             GridShadowPassNode::NAME,
-            bevy::core_pipeline::core_3d::graph::node::START_MAIN_PASS,
+            bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
         );
 }
