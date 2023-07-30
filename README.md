@@ -34,13 +34,13 @@ bevy_infinite_grid = { git = "https://github.com/ForesightMiningSoftwareCorporat
 Insert the infinite grid plugin after the default plugins.
 
 ```rust
-.add_plugin(InfiniteGridPlugin)
+.add_plugins(InfiniteGridPlugin)
 ```
 
 And spawn the grid to see the results.
 
 ```rust
-commands.spawn_bundle(InfiniteGridBundle::new(
+commands.spawn(InfiniteGridBundle::new(
     materials.add(InfiniteGridMaterial::default()),
 ));
 ```

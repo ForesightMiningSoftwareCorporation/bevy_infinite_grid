@@ -154,15 +154,14 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
             )
         ];
 
-        let bind_group = setup_morph_and_skinning_defs(
+        bind_group_layouts.push(setup_morph_and_skinning_defs(
             &self.mesh_layouts,
             layout,
             4,
             &key,
             &mut shader_defs,
             &mut vertex_attributes,
-        );
-        bind_group_layouts.push(bind_group);
+        ));
 
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
 
@@ -539,9 +538,12 @@ pub fn register_shadow(app: &mut App) {
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
             prepare_grid_shadow_views.in_set(RenderSet::Prepare),
         )
-        .add_systems(Render, queue_grid_shadows.in_set(RenderSet::Queue))
-        .add_systems(Render, queue_grid_shadow_bind_groups.in_set(RenderSet::Queue))
-        .add_systems(Render, queue_grid_shadow_view_bind_group.in_set(RenderSet::Queue));
+        .add_systems(Render,
+            (
+                queue_grid_shadows,
+                queue_grid_shadow_bind_groups,
+                queue_grid_shadow_view_bind_group,
+            ).in_set(RenderSet::Queue));
 
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();

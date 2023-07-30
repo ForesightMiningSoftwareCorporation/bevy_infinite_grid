@@ -588,7 +588,9 @@ pub fn render_app_builder(app: &mut App) {
         .resource_mut::<Assets<Shader>>()
         .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
 
-    let render_app = app.get_sub_app_mut(RenderApp).unwrap();
+    let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        return
+    };
     render_app
         .init_resource::<GridViewUniforms>()
         .init_resource::<InfiniteGridUniforms>()
@@ -600,11 +602,17 @@ pub fn render_app_builder(app: &mut App) {
         .add_systems(ExtractSchedule, extract_grid_shadows
             .before(extract_infinite_grids) // order to minimize move overhead
         )
-        .add_systems(Render, prepare_infinite_grids.in_set(RenderSet::Prepare))
-        .add_systems(Render, prepare_grid_shadows.in_set(RenderSet::Prepare))
-        .add_systems(Render, prepare_grid_view_bind_groups.in_set(RenderSet::Prepare))
-        .add_systems(Render, queue_infinite_grids.in_set(RenderSet::Queue))
-        .add_systems(Render, queue_grid_view_bind_groups.in_set(RenderSet::Queue));
+        .add_systems(Render,
+            (
+                prepare_infinite_grids,
+                prepare_grid_shadows,
+                prepare_grid_view_bind_groups,
+            ).in_set(RenderSet::Prepare))
+        .add_systems(Render,
+            (
+                queue_infinite_grids,
+                queue_grid_view_bind_groups,
+            ).in_set(RenderSet::Queue));
 
     shadow::register_shadow(app);
 }
