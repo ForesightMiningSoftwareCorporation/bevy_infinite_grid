@@ -144,14 +144,14 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
 
         let mut bind_group_layouts = vec![self.view_layout.clone()];
         let mut shader_defs = vec![
-            ShaderDefVal::Int(
+            ShaderDefVal::UInt(
                 "MAX_DIRECTIONAL_LIGHTS".to_string(),
-                MAX_DIRECTIONAL_LIGHTS as i32,
+                MAX_DIRECTIONAL_LIGHTS as u32,
             ),
-            ShaderDefVal::Int(
+            ShaderDefVal::UInt(
                 "MAX_CASCADES_PER_LIGHT".to_string(),
-                MAX_CASCADES_PER_LIGHT as i32,
-            )
+                MAX_CASCADES_PER_LIGHT as u32,
+            ),
         ];
 
         bind_group_layouts.push(setup_morph_and_skinning_defs(

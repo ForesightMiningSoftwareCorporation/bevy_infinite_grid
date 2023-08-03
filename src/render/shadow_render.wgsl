@@ -1,5 +1,6 @@
-#import bevy_pbr::mesh_view_types
-#import bevy_pbr::mesh_types
+#import bevy_pbr::mesh_functions    mesh_position_local_to_clip
+#import bevy_pbr::mesh_types        Mesh
+#import bevy_render::view           View
 
 @group(0) @binding(0)
 var<uniform> view: View;
