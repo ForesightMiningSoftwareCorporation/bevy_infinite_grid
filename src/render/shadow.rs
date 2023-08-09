@@ -538,11 +538,12 @@ pub fn register_shadow(app: &mut App) {
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
             prepare_grid_shadow_views.in_set(RenderSet::Prepare),
         )
-        .add_systems(Render,
+        .add_systems(
+            Render,
             (
                 queue_grid_shadows,
                 queue_grid_shadow_bind_groups,
-                queue_grid_shadow_view_bind_group,
+                queue_grid_shadow_view_bind_group
             ).in_set(RenderSet::Queue));
 
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
