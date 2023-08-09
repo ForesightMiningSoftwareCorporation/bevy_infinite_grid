@@ -4,9 +4,12 @@ use bevy::{
         system::{
             lifetimeless::{Read, SRes},
             SystemParamItem,
-        }
+        },
     },
-    pbr::{DrawMesh, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS, MeshLayouts, MeshPipeline, MeshPipelineKey, NotShadowCaster, SetMeshBindGroup, setup_morph_and_skinning_defs},
+    pbr::{
+        setup_morph_and_skinning_defs, DrawMesh, MeshLayouts, MeshPipeline, MeshPipelineKey,
+        NotShadowCaster, SetMeshBindGroup, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
+    },
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -16,8 +19,7 @@ use bevy::{
         render_graph::{Node, RenderGraph},
         render_phase::{
             AddRenderCommand, CachedRenderPipelinePhaseItem, DrawFunctionId, DrawFunctions,
-            PhaseItem, RenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline,
+            PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
         },
         render_resource::{
             AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
@@ -26,9 +28,9 @@ use bevy::{
             Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
             PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
             RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
-            SpecializedMeshPipelines, TextureDescriptor, TextureDimension, TextureFormat,
-            TextureUsages, TextureView, VertexState,
+            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline,
+            SpecializedMeshPipelineError, SpecializedMeshPipelines, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages, TextureView, VertexState,
         },
         renderer::RenderDevice,
         texture::TextureCache,
@@ -282,7 +284,7 @@ fn prepare_grid_shadow_views(
                 dimension: TextureDimension::D2,
                 format: TextureFormat::R8Unorm,
                 usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
-                view_formats: &[]
+                view_formats: &[],
             },
         );
 
@@ -292,7 +294,7 @@ fn prepare_grid_shadow_views(
                 frustum_intersect.width / -2.,
                 frustum_intersect.height / -2.,
                 frustum_intersect.width / 2.,
-                frustum_intersect.height / 2.
+                frustum_intersect.height / 2.,
             ),
             ..Default::default()
         };
@@ -308,7 +310,7 @@ fn prepare_grid_shadow_views(
                 view_projection: None,
                 hdr: false,
                 viewport: UVec4::new(0, 0, width, height),
-                color_grading: Default::default()
+                color_grading: Default::default(),
             },
             GridShadowView {
                 texture_view: texture.default_view.clone(),
@@ -380,7 +382,7 @@ fn queue_grid_shadows(
     casting_meshes: Query<&Handle<Mesh>, Without<NotShadowCaster>>,
     render_meshes: Res<RenderAssets<Mesh>>,
     mut pipelines: ResMut<SpecializedMeshPipelines<GridShadowPipeline>>,
-    mut pipeline_cache: ResMut<PipelineCache>,
+    pipeline_cache: Res<PipelineCache>,
     shadow_pipeline: Res<GridShadowPipeline>,
     shadow_draw_functions: Res<DrawFunctions<GridShadow>>,
 ) {
@@ -393,12 +395,8 @@ fn queue_grid_shadows(
             if let Ok(mesh_handle) = casting_meshes.get(entity) {
                 if let Some(mesh) = render_meshes.get(mesh_handle) {
                     let key = MeshPipelineKey::from_primitive_topology(mesh.primitive_topology);
-                    let pipeline_id = pipelines.specialize(
-                        &mut pipeline_cache,
-                        &shadow_pipeline,
-                        key,
-                        &mesh.layout,
-                    );
+                    let pipeline_id =
+                        pipelines.specialize(&pipeline_cache, &shadow_pipeline, key, &mesh.layout);
 
                     let pipeline_id = match pipeline_id {
                         Ok(id) => id,
@@ -489,8 +487,7 @@ impl Node for GridShadowPassNode {
             };
 
             let draw_functions = world.resource::<DrawFunctions<GridShadow>>();
-            let mut tracked_render_pass = render_context
-                .begin_tracked_render_pass(pass_descriptor);
+            let mut tracked_render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
             let mut draw_functions = draw_functions.write();
             for item in &render_phase.items {
                 let draw_function = draw_functions.get_mut(item.draw_function).unwrap();
@@ -516,9 +513,10 @@ impl Default for RenderSettings {
 }
 
 pub fn register_shadow(app: &mut App) {
-    app.world
-        .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADOW_SHADER_HANDLE, Shader::from_wgsl(SHADOW_RENDER, file!()));
+    app.world.resource_mut::<Assets<Shader>>().set_untracked(
+        SHADOW_SHADER_HANDLE,
+        Shader::from_wgsl(SHADOW_RENDER, file!()),
+    );
 
     let render_settings = app
         .world
@@ -534,7 +532,8 @@ pub fn register_shadow(app: &mut App) {
         .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>()
         .insert_resource(render_settings)
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
-        .add_systems(Render,
+        .add_systems(
+            Render,
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
             prepare_grid_shadow_views.in_set(RenderSet::Prepare),
         )
@@ -543,8 +542,10 @@ pub fn register_shadow(app: &mut App) {
             (
                 queue_grid_shadows,
                 queue_grid_shadow_bind_groups,
-                queue_grid_shadow_view_bind_group
-            ).in_set(RenderSet::Queue));
+                queue_grid_shadow_view_bind_group,
+            )
+                .in_set(RenderSet::Queue),
+        );
 
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();
@@ -552,9 +553,8 @@ pub fn register_shadow(app: &mut App) {
         .get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
         .unwrap();
     draw_3d_graph.add_node(GridShadowPassNode::NAME, grid_shadow_pass_node);
-    draw_3d_graph
-        .add_node_edge(
-            GridShadowPassNode::NAME,
-            bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
-        );
+    draw_3d_graph.add_node_edge(
+        GridShadowPassNode::NAME,
+        bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
+    );
 }
