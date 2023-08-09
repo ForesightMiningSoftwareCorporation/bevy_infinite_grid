@@ -36,7 +36,7 @@ use bevy::{
             ExtractedView, ExtractedWindows, ViewUniform, ViewUniformOffset, ViewUniforms,
             VisibleEntities,
         },
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
     utils::FloatOrd,
 };
@@ -115,11 +115,11 @@ impl FromWorld for GridShadowPipeline {
         });
 
         let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap();
-        let skinned_mesh_layout = mesh_pipeline.skinned_mesh_layout.clone();
+        let skinned_mesh_layout = mesh_pipeline.mesh_layouts.skinned.clone();
 
         GridShadowPipeline {
             view_layout,
-            mesh_layout: mesh_pipeline.mesh_layout.clone(),
+            mesh_layout: mesh_pipeline.mesh_layouts.model_only.clone(),
             skinned_mesh_layout,
             sampler: render_device.create_sampler(&SamplerDescriptor {
                 address_mode_u: AddressMode::ClampToEdge,
@@ -523,7 +523,7 @@ impl Default for RenderSettings {
 pub fn register_shadow(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADOW_SHADER_HANDLE, Shader::from_wgsl(SHADOW_RENDER));
+        .set_untracked(SHADOW_SHADER_HANDLE, Shader::from_wgsl(SHADOW_RENDER, SHADOW_RENDER));
 
     let render_settings = app
         .world
@@ -539,13 +539,18 @@ pub fn register_shadow(app: &mut App) {
         .init_resource::<SpecializedMeshPipelines<GridShadowPipeline>>()
         .insert_resource(render_settings)
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
-        .add_system(
+        .add_systems(
             // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
+            Render,
             prepare_grid_shadow_views.in_set(RenderSet::Prepare),
         )
-        .add_system(queue_grid_shadows.in_set(RenderSet::Queue))
-        .add_system(queue_grid_shadow_bind_groups.in_set(RenderSet::Queue))
-        .add_system(queue_grid_shadow_view_bind_group.in_set(RenderSet::Queue));
+        .add_systems(
+            Render,
+            (
+                queue_grid_shadows,
+                queue_grid_shadow_bind_groups,
+                queue_grid_shadow_view_bind_group
+            ).in_set(RenderSet::Queue));
 
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();
@@ -556,6 +561,6 @@ pub fn register_shadow(app: &mut App) {
     draw_3d_graph
         .add_node_edge(
             GridShadowPassNode::NAME,
-            bevy::core_pipeline::core_3d::graph::node::MAIN_PASS,
+            bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
         );
 }
