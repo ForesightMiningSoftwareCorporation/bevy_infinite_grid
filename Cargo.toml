@@ -15,12 +15,18 @@ keywords = ["bevy"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.11", default-features = false, features = ["bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_asset"] }
+bevy = { version = "0.11.0", default-features = false, features = [
+    "bevy_render",
+    "bevy_core_pipeline",
+    "bevy_pbr",
+    "bevy_asset",
+] }
 
 [dev-dependencies]
-bevy = { version = "0.11", default-features = false, features = ["bevy_winit", "x11"] }
-bevy_flycam = "0.11"
-
-[patch.crates-io]
-#bevy = { path = "../bevy" }
-#bevy_flycam = { path = "../bevy_flycam" }
+bevy = { version = "0.11.0", default-features = false, features = [
+    "bevy_winit",
+    "x11",
+    "tonemapping_luts",
+    "ktx2",
+    "zstd",
+] }

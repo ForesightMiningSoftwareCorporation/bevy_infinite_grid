@@ -17,11 +17,13 @@ impl Plugin for InfiniteGridPlugin {
 
     fn finish(&self, app: &mut App) {
         render::render_app_builder(app);
-        app
-            .add_systems(PostUpdate, track_frustum_intersect_system)
-            .add_systems(PostUpdate, track_caster_visibility
-                .after(VisibilitySystems::CheckVisibility)
-            );
+        app.add_systems(
+            PostUpdate,
+            (
+                track_frustum_intersect_system,
+                track_caster_visibility.after(VisibilitySystems::CheckVisibility),
+            ),
+        );
     }
 }
 
@@ -176,10 +178,11 @@ fn track_frustum_intersect_system(
             .dot(grid.up())
             .signum();
 
-        let horizon = (-1.0..1.0)
-            .contains(&coords.y)
-            .then(|| coords.y)
-            .unwrap_or(horizon_sign);
+        let horizon = if (-1.0..1.0).contains(&coords.y) {
+            coords.y
+        } else {
+            horizon_sign
+        };
         // let horizon = horizon_sign;
 
         let seeds = [
@@ -204,9 +207,8 @@ fn track_frustum_intersect_system(
             let denominator = ray_direction.dot(plane_normal);
             let point_to_point = plane_origin - ray_origin;
             let t = plane_normal.dot(point_to_point) / denominator;
-            let pos = ray_direction * t + ray_origin;
 
-            pos
+            ray_direction * t + ray_origin
         });
 
         intersects.points = points;

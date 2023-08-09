@@ -1,12 +1,9 @@
 use bevy::prelude::*;
-use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_infinite_grid::{GridShadowCamera, InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(InfiniteGridPlugin)
-        .add_plugins(NoCameraPlayerPlugin)
+        .add_plugins((DefaultPlugins, InfiniteGridPlugin))
         .add_systems(Startup, setup_system)
         .run();
 }
@@ -19,26 +16,22 @@ fn setup_system(
     commands.spawn(InfiniteGridBundle {
         grid: InfiniteGrid {
             // shadow_color: None,
-            ..Default::default()
+            ..default()
         },
-        ..Default::default()
+        ..default()
     });
 
     commands
         .spawn(Camera3dBundle {
             transform: Transform::from_xyz(0.0, 4.37, 14.77),
-            ..Default::default()
+            ..default()
         })
-        .insert(FlyCam)
         .insert(GridShadowCamera);
 
     commands.spawn(DirectionalLightBundle {
         transform: Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.)
             .looking_at(Vec3::ZERO, Vec3::Y),
-        directional_light: DirectionalLight {
-            ..Default::default()
-        },
-        ..Default::default()
+        ..default()
     });
 
     let mat = standard_materials.add(StandardMaterial::default());
