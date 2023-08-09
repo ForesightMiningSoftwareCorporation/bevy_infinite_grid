@@ -34,7 +34,7 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::{ExtractedView, VisibleEntities},
-        Render, RenderSet, Extract, ExtractSchedule, RenderApp,
+        Render, RenderApp, RenderSet, Extract, ExtractSchedule,
     },
 };
 
@@ -586,12 +586,11 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
 pub fn render_app_builder(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, PLANE_RENDER));
+        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
 
     let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
         return
     };
-
     render_app
         .init_resource::<GridViewUniforms>()
         .init_resource::<InfiniteGridUniforms>()
@@ -603,18 +602,16 @@ pub fn render_app_builder(app: &mut App) {
         .add_systems(ExtractSchedule, extract_grid_shadows
             .before(extract_infinite_grids) // order to minimize move overhead
         )
-        .add_systems(
-            Render,
+        .add_systems(Render,
             (
                 prepare_infinite_grids,
                 prepare_grid_shadows,
-                prepare_grid_view_bind_groups
+                prepare_grid_view_bind_groups,
             ).in_set(RenderSet::Prepare))
-        .add_systems(
-            Render,
+        .add_systems(Render,
             (
                 queue_infinite_grids,
-                queue_grid_view_bind_groups
+                queue_grid_view_bind_groups,
             ).in_set(RenderSet::Queue));
 
     shadow::register_shadow(app);

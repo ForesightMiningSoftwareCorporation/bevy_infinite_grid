@@ -5,9 +5,9 @@ use bevy_infinite_grid::{GridShadowCamera, InfiniteGrid, InfiniteGridBundle, Inf
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(InfiniteGridPlugin)
-        .add_plugin(NoCameraPlayerPlugin)
-        .add_startup_system(setup_system)
+        .add_plugins(InfiniteGridPlugin)
+        .add_plugins(NoCameraPlayerPlugin)
+        .add_systems(Startup, setup_system)
         .run();
 }
 
