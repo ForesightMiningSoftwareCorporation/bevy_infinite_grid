@@ -35,7 +35,7 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
         view::{ExtractedView, ViewTarget, VisibleEntities},
-        Extract, ExtractSchedule, RenderApp, RenderSet,
+        Extract, ExtractSchedule, Render, RenderApp, RenderSet,
     },
 };
 
@@ -253,8 +253,8 @@ fn extract_infinite_grids(
                 entity,
                 (
                     ExtractedInfiniteGrid {
-                        transform: transform.clone(),
-                        grid: grid.clone(),
+                        transform: *transform,
+                        grid: *grid,
                     },
                     visible_entities.clone(),
                     RenderPhase::<GridShadow>::default(),
@@ -272,7 +272,7 @@ fn extract_grid_shadows(
     let extracted: Vec<_> = grids
         .iter()
         .filter(|(_, extracted, _)| extracted.grid.shadow_color.is_some())
-        .map(|(entity, _, intersect)| (entity, (intersect.clone(),)))
+        .map(|(entity, _, intersect)| (entity, (*intersect,)))
         .collect();
     commands.insert_or_spawn_batch(extracted);
 }
@@ -353,7 +353,7 @@ fn prepare_grid_shadows(
 }
 
 fn queue_infinite_grids(
-    mut pipeline_cache: ResMut<PipelineCache>,
+    pipeline_cache: Res<PipelineCache>,
     transparent_draw_functions: Res<DrawFunctions<Transparent3d>>,
     mut commands: Commands,
     uniforms: Res<InfiniteGridUniforms>,
@@ -532,11 +532,11 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
         };
 
         RenderPipelineDescriptor {
-            label: Some(Cow::Borrowed(
-                key.has_shadows
-                    .then(|| "grid-render-pipeline")
-                    .unwrap_or("grid-render-pipeline-shadowless"),
-            )),
+            label: Some(Cow::Borrowed(if key.has_shadows {
+                "grid-render-pipeline"
+            } else {
+                "grid-render-pipeline-shadowless"
+            })),
             layout: [self.view_layout.clone(), self.infinite_grid_layout.clone()]
                 .into_iter()
                 .chain(key.has_shadows.then(|| self.grid_shadows_layout.clone()))
@@ -599,9 +599,11 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
 pub fn render_app_builder(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER));
+        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
 
-    let render_app = app.get_sub_app_mut(RenderApp).unwrap();
+    let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        return
+    };
     render_app
         .init_resource::<GridViewUniforms>()
         .init_resource::<InfiniteGridUniforms>()
@@ -609,17 +611,23 @@ pub fn render_app_builder(app: &mut App) {
         .init_resource::<InfiniteGridPipeline>()
         .init_resource::<SpecializedRenderPipelines<InfiniteGridPipeline>>()
         .add_render_command::<Transparent3d, DrawInfiniteGrid>()
-        .add_system(extract_infinite_grids.in_schedule(ExtractSchedule))
-        .add_system(
-            extract_grid_shadows
-                .in_schedule(ExtractSchedule)
-                .before(extract_infinite_grids), // order to minimize move overhead
+        .add_systems(
+            ExtractSchedule,
+            (extract_grid_shadows, extract_infinite_grids).chain(), // order to minimize move overhead
         )
-        .add_system(prepare_infinite_grids.in_set(RenderSet::Prepare))
-        .add_system(prepare_grid_shadows.in_set(RenderSet::Prepare))
-        .add_system(prepare_grid_view_bind_groups.in_set(RenderSet::Prepare))
-        .add_system(queue_infinite_grids.in_set(RenderSet::Queue))
-        .add_system(queue_grid_view_bind_groups.in_set(RenderSet::Queue));
+        .add_systems(
+            Render,
+            (
+                prepare_infinite_grids,
+                prepare_grid_shadows,
+                prepare_grid_view_bind_groups,
+            )
+                .in_set(RenderSet::Prepare),
+        )
+        .add_systems(
+            Render,
+            (queue_infinite_grids, queue_grid_view_bind_groups).in_set(RenderSet::Queue),
+        );
 
     shadow::register_shadow(app);
 }

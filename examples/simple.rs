@@ -1,13 +1,11 @@
 use bevy::prelude::*;
-use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_infinite_grid::{GridShadowCamera, InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
+use camera_controller::{CameraController, CameraControllerPlugin};
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(InfiniteGridPlugin)
-        .add_plugin(NoCameraPlayerPlugin)
-        .add_startup_system(setup_system)
+        .add_plugins((DefaultPlugins, CameraControllerPlugin, InfiniteGridPlugin))
+        .add_systems(Startup, setup_system)
         .run();
 }
 
@@ -19,26 +17,24 @@ fn setup_system(
     commands.spawn(InfiniteGridBundle {
         grid: InfiniteGrid {
             // shadow_color: None,
-            ..Default::default()
+            ..default()
         },
-        ..Default::default()
+        ..default()
     });
 
-    commands
-        .spawn(Camera3dBundle {
+    commands.spawn((
+        Camera3dBundle {
             transform: Transform::from_xyz(0.0, 4.37, 14.77),
-            ..Default::default()
-        })
-        .insert(FlyCam)
-        .insert(GridShadowCamera);
+            ..default()
+        },
+        CameraController::default(),
+        GridShadowCamera,
+    ));
 
     commands.spawn(DirectionalLightBundle {
         transform: Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.)
             .looking_at(Vec3::ZERO, Vec3::Y),
-        directional_light: DirectionalLight {
-            ..Default::default()
-        },
-        ..Default::default()
+        ..default()
     });
 
     let mat = standard_materials.add(StandardMaterial::default());
@@ -61,4 +57,106 @@ fn setup_system(
         transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
     });
+}
+
+// This is a simplified version of the camera controller used in bevy examples
+mod camera_controller {
+    use bevy::{input::mouse::MouseMotion, prelude::*};
+
+    use std::f32::consts::*;
+
+    pub const RADIANS_PER_DOT: f32 = 1.0 / 180.0;
+
+    #[derive(Component)]
+    pub struct CameraController {
+        pub pitch: f32,
+        pub yaw: f32,
+        pub velocity: Vec3,
+    }
+
+    impl Default for CameraController {
+        fn default() -> Self {
+            Self {
+                pitch: 0.0,
+                yaw: 0.0,
+                velocity: Vec3::ZERO,
+            }
+        }
+    }
+
+    pub struct CameraControllerPlugin;
+
+    impl Plugin for CameraControllerPlugin {
+        fn build(&self, app: &mut App) {
+            app.add_systems(Update, camera_controller);
+        }
+    }
+
+    fn camera_controller(
+        time: Res<Time>,
+        mut mouse_events: EventReader<MouseMotion>,
+        mouse_button_input: Res<Input<MouseButton>>,
+        key_input: Res<Input<KeyCode>>,
+        mut query: Query<(&mut Transform, &mut CameraController), With<Camera>>,
+    ) {
+        let dt = time.delta_seconds();
+
+        if let Ok((mut transform, mut state)) = query.get_single_mut() {
+            // Handle key input
+            let mut axis_input = Vec3::ZERO;
+            if key_input.pressed(KeyCode::W) {
+                axis_input.z += 1.0;
+            }
+            if key_input.pressed(KeyCode::S) {
+                axis_input.z -= 1.0;
+            }
+            if key_input.pressed(KeyCode::D) {
+                axis_input.x += 1.0;
+            }
+            if key_input.pressed(KeyCode::A) {
+                axis_input.x -= 1.0;
+            }
+            if key_input.pressed(KeyCode::E) {
+                axis_input.y += 1.0;
+            }
+            if key_input.pressed(KeyCode::Q) {
+                axis_input.y -= 1.0;
+            }
+
+            // Apply movement update
+            if axis_input != Vec3::ZERO {
+                let max_speed = if key_input.pressed(KeyCode::ShiftLeft) {
+                    15.0
+                } else {
+                    5.0
+                };
+                state.velocity = axis_input.normalize() * max_speed;
+            } else {
+                state.velocity *= 0.5; // friction
+                if state.velocity.length_squared() < 1e-6 {
+                    state.velocity = Vec3::ZERO;
+                }
+            }
+            let forward = transform.forward();
+            let right = transform.right();
+            transform.translation += state.velocity.x * dt * right
+                + state.velocity.y * dt * Vec3::Y
+                + state.velocity.z * dt * forward;
+
+            // Handle mouse input
+            let mut mouse_delta = Vec2::ZERO;
+            if mouse_button_input.pressed(MouseButton::Left) {
+                for mouse_event in mouse_events.iter() {
+                    mouse_delta += mouse_event.delta;
+                }
+            }
+            if mouse_delta != Vec2::ZERO {
+                // Apply look update
+                state.pitch =
+                    (state.pitch - mouse_delta.y * RADIANS_PER_DOT).clamp(-PI / 2., PI / 2.);
+                state.yaw -= mouse_delta.x * RADIANS_PER_DOT;
+                transform.rotation = Quat::from_euler(EulerRot::ZYX, 0.0, state.yaw, state.pitch);
+            }
+        }
+    }
 }
