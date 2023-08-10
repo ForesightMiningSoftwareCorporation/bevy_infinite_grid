@@ -390,7 +390,7 @@ fn queue_infinite_grids(
     for (entities, mut phase, view) in views.iter_mut() {
         let mesh_key = MeshPipelineKey::from_hdr(view.hdr);
         let base_pipeline = pipelines.specialize(
-            &mut pipeline_cache,
+            &pipeline_cache,
             &pipeline,
             GridPipelineKey {
                 mesh_key,
@@ -398,7 +398,7 @@ fn queue_infinite_grids(
             },
         );
         let shadow_pipeline = pipelines.specialize(
-            &mut pipeline_cache,
+            &pipeline_cache,
             &pipeline,
             GridPipelineKey {
                 mesh_key,
