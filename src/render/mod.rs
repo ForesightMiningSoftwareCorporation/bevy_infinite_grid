@@ -13,6 +13,7 @@ use bevy::{
             SystemParamItem,
         },
     },
+    pbr::MeshPipelineKey,
     prelude::*,
     reflect::TypeUuid,
     render::{
@@ -33,7 +34,7 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
-        view::{ExtractedView, VisibleEntities},
+        view::{ExtractedView, ViewTarget, VisibleEntities},
         Extract, ExtractSchedule, Render, RenderApp, RenderSet,
     },
 };
@@ -386,18 +387,24 @@ fn queue_infinite_grids(
         .get_id::<DrawInfiniteGrid>()
         .unwrap();
 
-    let base_pipeline = pipelines.specialize(
-        &pipeline_cache,
-        &pipeline,
-        GridPipelineKey { has_shadows: false },
-    );
-    let shadow_pipeline = pipelines.specialize(
-        &pipeline_cache,
-        &pipeline,
-        GridPipelineKey { has_shadows: true },
-    );
-
     for (entities, mut phase, view) in views.iter_mut() {
+        let mesh_key = MeshPipelineKey::from_hdr(view.hdr);
+        let base_pipeline = pipelines.specialize(
+            &pipeline_cache,
+            &pipeline,
+            GridPipelineKey {
+                mesh_key,
+                has_shadows: false,
+            },
+        );
+        let shadow_pipeline = pipelines.specialize(
+            &pipeline_cache,
+            &pipeline,
+            GridPipelineKey {
+                mesh_key,
+                has_shadows: true,
+            },
+        );
         for &entity in &entities.entities {
             if infinite_grids
                 .get(entity)
@@ -511,6 +518,7 @@ impl FromWorld for InfiniteGridPipeline {
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 pub struct GridPipelineKey {
+    mesh_key: MeshPipelineKey,
     has_shadows: bool,
 }
 
@@ -518,6 +526,11 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
     type Key = GridPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let format = match key.mesh_key.contains(MeshPipelineKey::HDR) {
+            true => ViewTarget::TEXTURE_FORMAT_HDR,
+            false => TextureFormat::bevy_default(),
+        };
+
         RenderPipelineDescriptor {
             label: Some(Cow::Borrowed(if key.has_shadows {
                 "grid-render-pipeline"
@@ -574,7 +587,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
                     .collect(),
                 entry_point: Cow::Borrowed("fragment"),
                 targets: vec![Some(ColorTargetState {
-                    format: TextureFormat::bevy_default(),
+                    format,
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })],
