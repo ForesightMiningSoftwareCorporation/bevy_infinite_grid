@@ -8,6 +8,8 @@
 [![docs.rs](https://docs.rs/bevy_infinite_grid/badge.svg)](https://docs.rs/bevy_infinite_grid)
 [![Bevy tracking](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://github.com/bevyengine/bevy/blob/main/docs/plugins_guidelines.md#main-branch-tracking)
 
+![demo](demo.png)
+
 </div>
 
 # Demo
