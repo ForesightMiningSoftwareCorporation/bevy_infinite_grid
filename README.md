@@ -62,6 +62,6 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ## Sponsors
 
-The creation and maintenance of Bevy Transform Gizmo is sponsored by Foresight Mining Software Corporation.
+The creation and maintenance of Bevy Infinite Grid is sponsored by Foresight Mining Software Corporation.
 
 <img src="https://user-images.githubusercontent.com/2632925/151242316-db3455d1-4934-4374-8369-1818daf512dd.png" alt="Foresight Mining Software Corporation" width="480">
