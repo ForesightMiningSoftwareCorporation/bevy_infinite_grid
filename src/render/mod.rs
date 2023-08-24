@@ -352,6 +352,7 @@ fn prepare_grid_shadows(
         .write_buffer(&render_device, &render_queue);
 }
 
+#[allow(clippy::too_many_arguments)]
 fn queue_infinite_grids(
     pipeline_cache: Res<PipelineCache>,
     transparent_draw_functions: Res<DrawFunctions<Transparent3d>>,
@@ -367,6 +368,7 @@ fn queue_infinite_grids(
         &mut RenderPhase<Transparent3d>,
         &ExtractedView,
     )>,
+    msaa: Res<Msaa>,
 ) {
     let bind_group = if let Some(binding) = uniforms.uniforms.binding() {
         render_device.create_bind_group(&BindGroupDescriptor {
@@ -395,6 +397,7 @@ fn queue_infinite_grids(
             GridPipelineKey {
                 mesh_key,
                 has_shadows: false,
+                sample_count: msaa.samples(),
             },
         );
         let shadow_pipeline = pipelines.specialize(
@@ -403,6 +406,7 @@ fn queue_infinite_grids(
             GridPipelineKey {
                 mesh_key,
                 has_shadows: true,
+                sample_count: msaa.samples(),
             },
         );
         for &entity in &entities.entities {
@@ -520,6 +524,7 @@ impl FromWorld for InfiniteGridPipeline {
 pub struct GridPipelineKey {
     mesh_key: MeshPipelineKey,
     has_shadows: bool,
+    sample_count: u32,
 }
 
 impl SpecializedRenderPipeline for InfiniteGridPipeline {
@@ -574,7 +579,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
                 },
             }),
             multisample: MultisampleState {
-                count: 4,
+                count: key.sample_count,
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
