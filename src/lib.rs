@@ -226,6 +226,7 @@ fn track_frustum_intersect_system(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn track_caster_visibility(
     mut grids: Query<(
         &mut VisibleEntities,
