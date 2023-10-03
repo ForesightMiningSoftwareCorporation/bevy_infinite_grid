@@ -7,6 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/bevy_infinite_grid)](https://crates.io/crates/bevy_infinite_grid)
 [![docs.rs](https://docs.rs/bevy_infinite_grid/badge.svg)](https://docs.rs/bevy_infinite_grid)
 [![Bevy tracking](https://img.shields.io/badge/Bevy%20tracking-released%20version-lightblue)](https://github.com/bevyengine/bevy/blob/main/docs/plugins_guidelines.md#main-branch-tracking)
+[![CI-CD](https://github.com/ForesightMiningSoftwareCorporation/bevy_infinite_grid/actions/workflows/release.yml/badge.svg)](https://github.com/ForesightMiningSoftwareCorporation/bevy_infinite_grid/actions/workflows/release.yml)
 
 ![demo](demo.png)
 
@@ -62,6 +63,6 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 ## Sponsors
 
-The creation and maintenance of Bevy Infinite Grid is sponsored by Foresight Mining Software Corporation.
+The creation and maintenance of Bevy Infinite Grid is sponsored by Foresight Spatial Labs.
 
-<img src="https://user-images.githubusercontent.com/2632925/151242316-db3455d1-4934-4374-8369-1818daf512dd.png" alt="Foresight Mining Software Corporation" width="480">
+<img src="https://avatars.githubusercontent.com/u/83515353?s=200&v=4" alt="Foresight Spatial Labs" width="480">
