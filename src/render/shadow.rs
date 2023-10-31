@@ -43,7 +43,7 @@ use bevy::{
     utils::FloatOrd,
 };
 
-use crate::{GridFrustumIntersect, InfiniteGridSettings};
+use crate::{GlobalInfiniteGridSettings, GridFrustumIntersect};
 
 use super::{
     ExtractedInfiniteGrid, GridShadowUniformOffset, GridShadowUniforms, InfiniteGridPipeline,
@@ -520,7 +520,7 @@ pub fn register_shadow(app: &mut App) {
 
     let render_settings = app
         .world
-        .resource::<InfiniteGridSettings>()
+        .resource::<GlobalInfiniteGridSettings>()
         .render_settings
         .clone();
 
