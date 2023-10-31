@@ -267,11 +267,11 @@ fn extract_infinite_grids(
 
 fn extract_grid_shadows(
     mut commands: Commands,
-    grids: Extract<Query<(Entity, &ExtractedInfiniteGrid, &GridFrustumIntersect)>>,
+    grids: Extract<Query<(Entity, &InfiniteGrid, &GridFrustumIntersect)>>,
 ) {
     let extracted: Vec<_> = grids
         .iter()
-        .filter(|(_, extracted, _)| extracted.grid.shadow_color.is_some())
+        .filter(|(_, grid, _)| grid.shadow_color.is_some())
         .map(|(entity, _, intersect)| (entity, (*intersect,)))
         .collect();
     commands.insert_or_spawn_batch(extracted);
@@ -607,7 +607,7 @@ pub fn render_app_builder(app: &mut App) {
         .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
 
     let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
-        return
+        return;
     };
     render_app
         .init_resource::<GridViewUniforms>()
