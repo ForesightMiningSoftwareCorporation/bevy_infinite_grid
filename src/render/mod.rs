@@ -296,11 +296,11 @@ fn extract_infinite_grids(
 
 fn extract_grid_shadows(
     mut commands: Commands,
-    grids: Extract<Query<(Entity, &InfiniteGrid, &GridFrustumIntersect)>>,
+    grids: Extract<Query<(Entity, &InfiniteGridSettings, &GridFrustumIntersect)>>,
 ) {
     let extracted: Vec<_> = grids
         .iter()
-        .filter(|(_, grid, _)| grid.shadow_color.is_some())
+        .filter(|(_, grid_settings, _)| grid_settings.shadow_color.is_some())
         .map(|(entity, _, intersect)| (entity, (*intersect,)))
         .collect();
     commands.insert_or_spawn_batch(extracted);
