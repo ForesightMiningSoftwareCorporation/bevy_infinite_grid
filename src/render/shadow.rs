@@ -439,6 +439,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowBindGroup<I
     }
 }
 
+#[allow(clippy::type_complexity)]
 struct GridShadowPassNode {
     grids: Vec<Entity>,
     grid_entity_query: QueryState<Entity, With<GridShadowView>>,
