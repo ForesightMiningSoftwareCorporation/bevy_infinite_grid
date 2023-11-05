@@ -35,8 +35,8 @@ use bevy::{
         renderer::RenderDevice,
         texture::TextureCache,
         view::{
-            ExtractedView, ExtractedWindows, ViewUniform, ViewUniformOffset, ViewUniforms,
-            VisibleEntities,
+            prepare_view_uniforms, ExtractedView, ExtractedWindows, ViewUniform, ViewUniformOffset,
+            ViewUniforms, VisibleEntities,
         },
         Render, RenderApp, RenderSet,
     },
@@ -439,10 +439,15 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowBindGroup<I
     }
 }
 
+#[allow(clippy::type_complexity)]
 struct GridShadowPassNode {
     grids: Vec<Entity>,
     grid_entity_query: QueryState<Entity, With<GridShadowView>>,
-    grid_element_query: QueryState<(Read<GridShadowView>, Read<RenderPhase<GridShadow>>)>,
+    grid_element_query: QueryState<(
+        Read<GridShadowView>,
+        Read<RenderPhase<GridShadow>>,
+        Read<ViewUniformOffset>,
+    )>,
 }
 
 impl GridShadowPassNode {
@@ -471,7 +476,7 @@ impl Node for GridShadowPassNode {
         world: &World,
     ) -> Result<(), bevy::render::render_graph::NodeRunError> {
         for &entity in &self.grids {
-            let (shadow_view, render_phase) =
+            let (shadow_view, render_phase, _) =
                 self.grid_element_query.get_manual(world, entity).unwrap();
             let pass_descriptor = RenderPassDescriptor {
                 label: Some("grid_shadow_pass"),
@@ -486,13 +491,8 @@ impl Node for GridShadowPassNode {
                 depth_stencil_attachment: None,
             };
 
-            let draw_functions = world.resource::<DrawFunctions<GridShadow>>();
             let mut tracked_render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
-            let mut draw_functions = draw_functions.write();
-            for item in &render_phase.items {
-                let draw_function = draw_functions.get_mut(item.draw_function).unwrap();
-                draw_function.draw(world, &mut tracked_render_pass, entity, item);
-            }
+            render_phase.render(&mut tracked_render_pass, world, entity);
         }
 
         Ok(())
@@ -534,8 +534,10 @@ pub fn register_shadow(app: &mut App) {
         .add_render_command::<GridShadow, DrawGridShadowMesh>()
         .add_systems(
             Render,
-            // Register as exclusive system because ordering against `bevy_render::view::prepare_view_uniforms` isn't possible otherwise.
-            prepare_grid_shadow_views.in_set(RenderSet::Prepare),
+            (prepare_grid_shadow_views, apply_deferred)
+                .chain()
+                .before(prepare_view_uniforms)
+                .in_set(RenderSet::Prepare),
         )
         .add_systems(
             Render,
