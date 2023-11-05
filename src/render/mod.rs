@@ -39,7 +39,7 @@ use bevy::{
     },
 };
 
-use crate::{GridFrustumIntersect, InfiniteGrid};
+use crate::{GridFrustumIntersect, InfiniteGridSettings};
 
 use shadow::{GridShadow, SetGridShadowBindGroup};
 
@@ -51,7 +51,7 @@ const SHADER_HANDLE: HandleUntyped =
 #[derive(Component)]
 struct ExtractedInfiniteGrid {
     transform: GlobalTransform,
-    grid: InfiniteGrid,
+    grid: InfiniteGridSettings,
 }
 
 #[derive(Debug, ShaderType)]
@@ -59,12 +59,14 @@ pub struct InfiniteGridUniform {
     rot_matrix: Mat3,
     offset: Vec3,
     normal: Vec3,
+}
+
+#[derive(Debug, ShaderType)]
+pub struct GridDisplaySettingsUniform {
     scale: f32,
     // 1 / fadeout_distance
     dist_fadeout_const: f32,
-
     dot_fadeout_const: f32,
-
     x_axis_color: Vec3,
     z_axis_color: Vec3,
     minor_line_color: Vec4,
@@ -86,17 +88,28 @@ struct InfiniteGridUniforms {
 }
 
 #[derive(Resource, Default)]
+struct GridDisplaySettingsUniforms {
+    uniforms: DynamicUniformBuffer<GridDisplaySettingsUniform>,
+}
+
+#[derive(Resource, Default)]
 struct GridShadowUniforms {
     uniforms: DynamicUniformBuffer<GridShadowUniform>,
 }
 
 #[derive(Component)]
-struct InfiniteGridUniformOffset {
-    offset: u32,
+struct InfiniteGridUniformOffsets {
+    position_offset: u32,
+    settings_offset: u32,
 }
 
 #[derive(Component)]
 pub struct GridShadowUniformOffset {
+    offset: u32,
+}
+
+#[derive(Component)]
+pub struct PerCameraSettingsUniformOffset {
     offset: u32,
 }
 
@@ -154,18 +167,27 @@ struct SetInfiniteGridBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetInfiniteGridBindGroup<I> {
     type Param = SRes<InfiniteGridBindGroup>;
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = Read<InfiniteGridUniformOffset>;
+    type ViewWorldQuery = Option<Read<PerCameraSettingsUniformOffset>>;
+    type ItemWorldQuery = Read<InfiniteGridUniformOffsets>;
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        offset: ROQueryItem<'w, Self::ItemWorldQuery>,
+        camera_settings_offset: ROQueryItem<'w, Self::ViewWorldQuery>,
+        base_offsets: ROQueryItem<'w, Self::ItemWorldQuery>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(I, &bind_group.into_inner().value, &[offset.offset]);
+        pass.set_bind_group(
+            I,
+            &bind_group.into_inner().value,
+            &[
+                base_offsets.position_offset,
+                camera_settings_offset
+                    .map(|cs| cs.offset)
+                    .unwrap_or(base_offsets.settings_offset),
+            ],
+        );
         RenderCommandResult::Success
     }
 }
@@ -244,7 +266,14 @@ fn queue_grid_view_bind_groups(
 
 fn extract_infinite_grids(
     mut commands: Commands,
-    grids: Extract<Query<(Entity, &InfiniteGrid, &GlobalTransform, &VisibleEntities)>>,
+    grids: Extract<
+        Query<(
+            Entity,
+            &InfiniteGridSettings,
+            &GlobalTransform,
+            &VisibleEntities,
+        )>,
+    >,
 ) {
     let extracted: Vec<_> = grids
         .iter()
@@ -277,26 +306,41 @@ fn extract_grid_shadows(
     commands.insert_or_spawn_batch(extracted);
 }
 
+fn extract_per_camera_settings(
+    mut commands: Commands,
+    cameras: Extract<Query<(Entity, &InfiniteGridSettings), With<Camera>>>,
+) {
+    let extracted: Vec<_> = cameras
+        .iter()
+        .map(|(entity, settings)| (entity, *settings))
+        .collect();
+    commands.insert_or_spawn_batch(extracted);
+}
+
 fn prepare_infinite_grids(
     mut commands: Commands,
     grids: Query<(Entity, &ExtractedInfiniteGrid)>,
-    mut uniforms: ResMut<InfiniteGridUniforms>,
+    cameras: Query<(Entity, &InfiniteGridSettings), With<ExtractedView>>,
+    mut position_uniforms: ResMut<InfiniteGridUniforms>,
+    mut settings_uniforms: ResMut<GridDisplaySettingsUniforms>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) {
-    uniforms.uniforms.clear();
+    position_uniforms.uniforms.clear();
     for (entity, extracted) in grids.iter() {
         let transform = extracted.transform;
         let t = transform.compute_transform();
         let offset = transform.translation();
         let normal = transform.up();
         let rot_matrix = Mat3::from_quat(t.rotation.inverse());
-        commands.entity(entity).insert(InfiniteGridUniformOffset {
-            offset: uniforms.uniforms.push(InfiniteGridUniform {
+        commands.entity(entity).insert(InfiniteGridUniformOffsets {
+            position_offset: position_uniforms.uniforms.push(InfiniteGridUniform {
                 rot_matrix,
                 offset,
                 normal,
-                scale: t.scale.x,
+            }),
+            settings_offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
+                scale: extracted.grid.scale,
                 dist_fadeout_const: 1. / extracted.grid.fadeout_distance,
                 dot_fadeout_const: 1. / extracted.grid.dot_fadeout_strength,
                 x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
@@ -307,7 +351,27 @@ fn prepare_infinite_grids(
         });
     }
 
-    uniforms
+    for (entity, settings) in cameras.iter() {
+        commands
+            .entity(entity)
+            .insert(PerCameraSettingsUniformOffset {
+                offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
+                    scale: settings.scale,
+                    dist_fadeout_const: 1. / settings.fadeout_distance,
+                    dot_fadeout_const: 1. / settings.dot_fadeout_strength,
+                    x_axis_color: Vec3::from_slice(&settings.x_axis_color.as_rgba_f32()),
+                    z_axis_color: Vec3::from_slice(&settings.z_axis_color.as_rgba_f32()),
+                    minor_line_color: Vec4::from_slice(&settings.minor_line_color.as_rgba_f32()),
+                    major_line_color: Vec4::from_slice(&settings.major_line_color.as_rgba_f32()),
+                }),
+            });
+    }
+
+    position_uniforms
+        .uniforms
+        .write_buffer(&render_device, &render_queue);
+
+    settings_uniforms
         .uniforms
         .write_buffer(&render_device, &render_queue);
 }
@@ -357,7 +421,8 @@ fn queue_infinite_grids(
     pipeline_cache: Res<PipelineCache>,
     transparent_draw_functions: Res<DrawFunctions<Transparent3d>>,
     mut commands: Commands,
-    uniforms: Res<InfiniteGridUniforms>,
+    position_uniforms: Res<InfiniteGridUniforms>,
+    settings_uniforms: Res<GridDisplaySettingsUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<InfiniteGridPipeline>>,
     render_device: Res<RenderDevice>,
@@ -370,14 +435,24 @@ fn queue_infinite_grids(
     )>,
     msaa: Res<Msaa>,
 ) {
-    let bind_group = if let Some(binding) = uniforms.uniforms.binding() {
+    let bind_group = if let Some((position_binding, settings_binding)) = position_uniforms
+        .uniforms
+        .binding()
+        .zip(settings_uniforms.uniforms.binding())
+    {
         render_device.create_bind_group(&BindGroupDescriptor {
             label: Some("infinite-grid-bind-group"),
             layout: &pipeline.infinite_grid_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: binding.clone(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: position_binding.clone(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: settings_binding.clone(),
+                },
+            ],
         })
     } else {
         return;
@@ -467,16 +542,32 @@ impl FromWorld for InfiniteGridPipeline {
         let infinite_grid_layout =
             render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
                 label: Some("infinite-grid-bind-group-layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
-                    ty: BindingType::Buffer {
-                        ty: BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: BufferSize::new(InfiniteGridUniform::min_size().into()),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: BufferSize::new(
+                                InfiniteGridUniform::min_size().into(),
+                            ),
+                        },
+                        count: None,
                     },
-                    count: None,
-                }],
+                    BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: ShaderStages::FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: true,
+                            min_binding_size: BufferSize::new(
+                                GridDisplaySettingsUniform::min_size().into(),
+                            ),
+                        },
+                        count: None,
+                    },
+                ],
             });
 
         let grid_shadows_layout =
@@ -612,6 +703,7 @@ pub fn render_app_builder(app: &mut App) {
     render_app
         .init_resource::<GridViewUniforms>()
         .init_resource::<InfiniteGridUniforms>()
+        .init_resource::<GridDisplaySettingsUniforms>()
         .init_resource::<GridShadowUniforms>()
         .init_resource::<InfiniteGridPipeline>()
         .init_resource::<SpecializedRenderPipelines<InfiniteGridPipeline>>()
@@ -620,6 +712,7 @@ pub fn render_app_builder(app: &mut App) {
             ExtractSchedule,
             (extract_grid_shadows, extract_infinite_grids).chain(), // order to minimize move overhead
         )
+        .add_systems(ExtractSchedule, extract_per_camera_settings)
         .add_systems(
             Render,
             (

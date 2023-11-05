@@ -12,7 +12,7 @@ pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<InfiniteGridSettings>();
+        app.init_resource::<GlobalInfiniteGridSettings>();
     }
 
     fn finish(&self, app: &mut App) {
@@ -28,12 +28,15 @@ impl Plugin for InfiniteGridPlugin {
 }
 
 #[derive(Resource, Default)]
-pub struct InfiniteGridSettings {
+pub struct GlobalInfiniteGridSettings {
     pub render_settings: RenderSettings,
 }
 
+#[derive(Component, Default)]
+pub struct InfiniteGrid;
+
 #[derive(Component, Copy, Clone)]
-pub struct InfiniteGrid {
+pub struct InfiniteGridSettings {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
     pub shadow_color: Option<Color>,
@@ -41,9 +44,10 @@ pub struct InfiniteGrid {
     pub major_line_color: Color,
     pub fadeout_distance: f32,
     pub dot_fadeout_strength: f32,
+    pub scale: f32,
 }
 
-impl Default for InfiniteGrid {
+impl Default for InfiniteGridSettings {
     fn default() -> Self {
         Self {
             x_axis_color: Color::rgb(1.0, 0.2, 0.2),
@@ -53,6 +57,7 @@ impl Default for InfiniteGrid {
             major_line_color: Color::rgb(0.25, 0.25, 0.25),
             fadeout_distance: 100.,
             dot_fadeout_strength: 0.25,
+            scale: 1.,
         }
     }
 }
@@ -66,31 +71,17 @@ pub struct GridFrustumIntersect {
     pub height: f32,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct InfiniteGridBundle {
     pub transform: Transform,
     pub global_transform: GlobalTransform,
+    pub settings: InfiniteGridSettings,
     pub grid: InfiniteGrid,
     pub frustum_intersect: GridFrustumIntersect,
     pub visibility: Visibility,
     pub computed_visibility: ComputedVisibility,
     pub shadow_casters: VisibleEntities,
     pub no_frustum_culling: NoFrustumCulling,
-}
-
-impl Default for InfiniteGridBundle {
-    fn default() -> Self {
-        Self {
-            transform: Default::default(),
-            global_transform: Default::default(),
-            grid: Default::default(),
-            frustum_intersect: Default::default(),
-            visibility: Default::default(),
-            computed_visibility: Default::default(),
-            shadow_casters: Default::default(),
-            no_frustum_culling: NoFrustumCulling,
-        }
-    }
 }
 
 pub fn calculate_distant_from(
@@ -136,12 +127,15 @@ pub struct GridShadowCamera;
 
 fn track_frustum_intersect_system(
     mut commands: Commands,
-    mut grids: Query<(
-        Entity,
-        &GlobalTransform,
-        &InfiniteGrid,
-        Option<&mut GridFrustumIntersect>,
-    )>,
+    mut grids: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            &InfiniteGridSettings,
+            Option<&mut GridFrustumIntersect>,
+        ),
+        With<InfiniteGrid>,
+    >,
     camera: Query<(&GlobalTransform, &Camera), With<GridShadowCamera>>,
 ) {
     if camera.is_empty() {
