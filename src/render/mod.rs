@@ -15,7 +15,6 @@ use bevy::{
     },
     pbr::MeshPipelineKey,
     prelude::*,
-    reflect::TypeUuid,
     render::{
         mesh::PrimitiveTopology,
         render_phase::{
@@ -23,14 +22,13 @@ use bevy::{
             RenderPhase, SetItemPipeline,
         },
         render_resource::{
-            BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BlendState,
-            BufferBindingType, BufferSize, ColorTargetState, ColorWrites, CompareFunction,
-            DepthBiasState, DepthStencilState, DynamicUniformBuffer, FragmentState,
-            MultisampleState, PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor,
-            SamplerBindingType, ShaderStages, ShaderType, SpecializedRenderPipeline,
-            SpecializedRenderPipelines, StencilFaceState, StencilState, TextureFormat,
-            TextureSampleType, TextureViewDimension, VertexState,
+            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
+            BindGroupLayoutEntry, BindingType, BlendState, BufferBindingType, BufferSize,
+            ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
+            DynamicUniformBuffer, FragmentState, MultisampleState, PipelineCache, PolygonMode,
+            PrimitiveState, RenderPipelineDescriptor, SamplerBindingType, Shader, ShaderStages,
+            ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StencilFaceState,
+            StencilState, TextureFormat, TextureSampleType, TextureViewDimension, VertexState,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::BevyDefault,
@@ -45,8 +43,7 @@ use shadow::{GridShadow, SetGridShadowBindGroup};
 
 static PLANE_RENDER: &str = include_str!("plane_render.wgsl");
 
-const SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 15204473893972682982);
+const SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(15204473893972682982);
 
 #[derive(Component)]
 struct ExtractedInfiniteGrid {
@@ -249,14 +246,11 @@ fn queue_grid_view_bind_groups(
 ) {
     if let Some(binding) = uniforms.uniforms.binding() {
         for entity in views.iter() {
-            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                label: Some("grid-view-bind-group"),
-                layout: &pipeline.view_layout,
-                entries: &[BindGroupEntry {
-                    binding: 0,
-                    resource: binding.clone(),
-                }],
-            });
+            let bind_group = render_device.create_bind_group(
+                "grid-view-bind-group",
+                &pipeline.view_layout,
+                &BindGroupEntries::single(binding.clone()),
+            );
             commands
                 .entity(entity)
                 .insert(GridViewBindGroup { value: bind_group });
@@ -440,20 +434,11 @@ fn queue_infinite_grids(
         .binding()
         .zip(settings_uniforms.uniforms.binding())
     {
-        render_device.create_bind_group(&BindGroupDescriptor {
-            label: Some("infinite-grid-bind-group"),
-            layout: &pipeline.infinite_grid_layout,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: position_binding.clone(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: settings_binding.clone(),
-                },
-            ],
-        })
+        render_device.create_bind_group(
+            "infinite-grid-bind-group",
+            &pipeline.infinite_grid_layout,
+            &BindGroupEntries::sequential((position_binding, settings_binding)),
+        )
     } else {
         return;
     };
@@ -498,6 +483,8 @@ fn queue_infinite_grids(
                     entity,
                     draw_function: draw_function_id,
                     distance: f32::NEG_INFINITY,
+                    batch_range: 0..1,
+                    dynamic_offset: None,
                 });
             }
         }
@@ -639,7 +626,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
                 .collect(),
             push_constant_ranges: Vec::new(),
             vertex: VertexState {
-                shader: SHADER_HANDLE.typed(),
+                shader: SHADER_HANDLE,
                 shader_defs: vec![],
                 entry_point: Cow::Borrowed("vertex"),
                 buffers: vec![],
@@ -675,7 +662,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
                 alpha_to_coverage_enabled: false,
             },
             fragment: Some(FragmentState {
-                shader: SHADER_HANDLE.typed(),
+                shader: SHADER_HANDLE,
                 shader_defs: key
                     .has_shadows
                     .then(|| "SHADOWS".into())
@@ -695,7 +682,7 @@ impl SpecializedRenderPipeline for InfiniteGridPipeline {
 pub fn render_app_builder(app: &mut App) {
     app.world
         .resource_mut::<Assets<Shader>>()
-        .set_untracked(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
+        .insert(SHADER_HANDLE, Shader::from_wgsl(PLANE_RENDER, file!()));
 
     let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
         return;

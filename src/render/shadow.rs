@@ -11,7 +11,6 @@ use bevy::{
         NotShadowCaster, SetMeshBindGroup, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS,
     },
     prelude::*,
-    reflect::TypeUuid,
     render::{
         camera::CameraProjection,
         mesh::MeshVertexBufferLayout,
@@ -22,15 +21,15 @@ use bevy::{
             PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
         },
         render_resource::{
-            AddressMode, BindGroup, BindGroupDescriptor, BindGroupEntry, BindGroupLayout,
-            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingResource, BindingType,
-            BufferBindingType, BufferSize, CachedRenderPipelineId, ColorTargetState, ColorWrites,
-            Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
-            PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines, TextureDescriptor,
-            TextureDimension, TextureFormat, TextureUsages, TextureView, VertexState,
+            AddressMode, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
+            BindGroupLayoutEntry, BindingResource, BindingType, BufferBindingType, BufferSize,
+            CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FilterMode,
+            FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PipelineCache,
+            PolygonMode, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor,
+            RenderPipelineDescriptor, Sampler, SamplerDescriptor, Shader, ShaderDefVal,
+            ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError,
+            SpecializedMeshPipelines, TextureDescriptor, TextureDimension, TextureFormat,
+            TextureUsages, TextureView, VertexState,
         },
         renderer::RenderDevice,
         texture::TextureCache,
@@ -40,8 +39,9 @@ use bevy::{
         },
         Render, RenderApp, RenderSet,
     },
-    utils::FloatOrd,
+    utils::{nonmax::NonMaxU32, FloatOrd},
 };
+use std::ops::Range;
 
 use crate::{GlobalInfiniteGridSettings, GridFrustumIntersect};
 
@@ -51,13 +51,14 @@ use super::{
 
 static SHADOW_RENDER: &str = include_str!("shadow_render.wgsl");
 
-const SHADOW_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 10461510954165139918);
+const SHADOW_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(10461510954165139918);
 
 pub struct GridShadow {
     pub entity: Entity,
     pub pipeline: CachedRenderPipelineId,
     pub draw_function: DrawFunctionId,
+    pub batch_range: Range<u32>,
+    pub dynamic_offset: Option<NonMaxU32>,
 }
 
 impl PhaseItem for GridShadow {
@@ -76,6 +77,26 @@ impl PhaseItem for GridShadow {
     #[inline]
     fn draw_function(&self) -> DrawFunctionId {
         self.draw_function
+    }
+
+    #[inline]
+    fn batch_range(&self) -> &Range<u32> {
+        &self.batch_range
+    }
+
+    #[inline]
+    fn batch_range_mut(&mut self) -> &mut Range<u32> {
+        &mut self.batch_range
+    }
+
+    #[inline]
+    fn dynamic_offset(&self) -> Option<NonMaxU32> {
+        self.dynamic_offset
+    }
+
+    #[inline]
+    fn dynamic_offset_mut(&mut self) -> &mut Option<NonMaxU32> {
+        &mut self.dynamic_offset
     }
 }
 
@@ -169,13 +190,13 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
 
         Ok(RenderPipelineDescriptor {
             vertex: VertexState {
-                shader: SHADOW_SHADER_HANDLE.typed::<Shader>(),
+                shader: SHADOW_SHADER_HANDLE,
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
                 buffers: vec![vertex_buffer_layout],
             },
             fragment: Some(FragmentState {
-                shader: SHADOW_SHADER_HANDLE.typed::<Shader>(),
+                shader: SHADOW_SHADER_HANDLE,
                 shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
@@ -326,14 +347,11 @@ fn queue_grid_shadow_view_bind_group(
     view_uniforms: Res<ViewUniforms>,
 ) {
     if let Some(view_binding) = view_uniforms.uniforms.binding() {
-        meta.view_bind_group = Some(render_device.create_bind_group(&BindGroupDescriptor {
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: view_binding,
-            }],
-            label: Some("grid_shadow_view_bind_group"),
-            layout: &shadow_pipeline.view_layout,
-        }));
+        meta.view_bind_group = Some(render_device.create_bind_group(
+            "grid_shadow_view_bind_group",
+            &shadow_pipeline.view_layout,
+            &BindGroupEntries::single(view_binding),
+        ));
     }
 }
 
@@ -352,24 +370,15 @@ fn queue_grid_shadow_bind_groups(
 ) {
     if let Some(uniform_binding) = uniforms.uniforms.binding() {
         for (entity, shadow_view) in grids.iter() {
-            let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
-                label: Some("grid-shadow-bind-group"),
-                layout: &infinite_grid_pipeline.grid_shadows_layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_binding.clone(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::TextureView(&shadow_view.texture_view),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: BindingResource::Sampler(&grid_shadow_pipeline.sampler),
-                    },
-                ],
-            });
+            let bind_group = render_device.create_bind_group(
+                "grid-shadow-bind-group",
+                &infinite_grid_pipeline.grid_shadows_layout,
+                &BindGroupEntries::sequential((
+                    uniform_binding.clone(),
+                    BindingResource::TextureView(&shadow_view.texture_view),
+                    BindingResource::Sampler(&grid_shadow_pipeline.sampler),
+                )),
+            );
             commands
                 .entity(entity)
                 .insert(GridShadowBindGroup { bind_group });
@@ -410,6 +419,8 @@ fn queue_grid_shadows(
                         draw_function: draw_shadow_mesh,
                         pipeline: pipeline_id,
                         entity,
+                        batch_range: 0..1,
+                        dynamic_offset: None,
                     });
                 }
             }
@@ -513,7 +524,7 @@ impl Default for RenderSettings {
 }
 
 pub fn register_shadow(app: &mut App) {
-    app.world.resource_mut::<Assets<Shader>>().set_untracked(
+    app.world.resource_mut::<Assets<Shader>>().insert(
         SHADOW_SHADER_HANDLE,
         Shader::from_wgsl(SHADOW_RENDER, file!()),
     );

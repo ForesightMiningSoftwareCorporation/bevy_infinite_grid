@@ -148,7 +148,7 @@ mod camera_controller {
             // Handle mouse input
             let mut mouse_delta = Vec2::ZERO;
             if mouse_button_input.pressed(MouseButton::Left) {
-                for mouse_event in mouse_events.iter() {
+                for mouse_event in mouse_events.read() {
                     mouse_delta += mouse_event.delta;
                 }
             }
