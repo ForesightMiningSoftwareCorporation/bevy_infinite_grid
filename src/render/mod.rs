@@ -216,13 +216,22 @@ fn prepare_grid_view_bind_groups(
     mut view_uniforms: ResMut<GridViewUniforms>,
     views: Query<(Entity, &ExtractedView)>,
 ) {
-    view_uniforms.uniforms.clear();
-    for (entity, camera) in views.iter() {
+    let views_iter = views.iter();
+    let view_count = views_iter.len();
+    let Some(mut writer) =
+        view_uniforms
+            .uniforms
+            .get_writer(view_count, &render_device, &render_queue)
+    else {
+        return;
+    };
+
+    for (entity, camera) in views_iter {
         let projection = camera.projection;
         let view = camera.transform.compute_matrix();
         let inverse_view = view.inverse();
         commands.entity(entity).insert(GridViewUniformOffset {
-            offset: view_uniforms.uniforms.push(GridViewUniform {
+            offset: writer.write(&GridViewUniform {
                 projection,
                 view,
                 inverse_view,
@@ -231,10 +240,6 @@ fn prepare_grid_view_bind_groups(
             }),
         });
     }
-
-    view_uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue)
 }
 
 fn queue_grid_view_bind_groups(
@@ -242,7 +247,7 @@ fn queue_grid_view_bind_groups(
     render_device: Res<RenderDevice>,
     uniforms: Res<GridViewUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
-    views: Query<Entity, With<GridViewUniformOffset>>,
+    views: Query<Entity, With<ExtractedView>>,
 ) {
     if let Some(binding) = uniforms.uniforms.binding() {
         for entity in views.iter() {
@@ -314,13 +319,29 @@ fn extract_per_camera_settings(
 fn prepare_infinite_grids(
     mut commands: Commands,
     grids: Query<(Entity, &ExtractedInfiniteGrid)>,
-    cameras: Query<(Entity, &InfiniteGridSettings), With<ExtractedView>>,
+    cameras: Query<(Entity, &InfiniteGridSettings)>,
     mut position_uniforms: ResMut<InfiniteGridUniforms>,
     mut settings_uniforms: ResMut<GridDisplaySettingsUniforms>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) {
-    position_uniforms.uniforms.clear();
+    let grids_iter = grids.iter();
+    let Some(mut position_uniform_writer) =
+        position_uniforms
+            .uniforms
+            .get_writer(grids_iter.len(), &render_device, &render_queue)
+    else {
+        return;
+    };
+
+    let Some(mut settings_uniform_writer) =
+        settings_uniforms
+            .uniforms
+            .get_writer(grids_iter.len(), &render_device, &render_queue)
+    else {
+        return;
+    };
+
     for (entity, extracted) in grids.iter() {
         let transform = extracted.transform;
         let t = transform.compute_transform();
@@ -328,12 +349,12 @@ fn prepare_infinite_grids(
         let normal = transform.up();
         let rot_matrix = Mat3::from_quat(t.rotation.inverse());
         commands.entity(entity).insert(InfiniteGridUniformOffsets {
-            position_offset: position_uniforms.uniforms.push(InfiniteGridUniform {
+            position_offset: position_uniform_writer.write(&InfiniteGridUniform {
                 rot_matrix,
                 offset,
                 normal,
             }),
-            settings_offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
+            settings_offset: settings_uniform_writer.write(&GridDisplaySettingsUniform {
                 scale: extracted.grid.scale,
                 dist_fadeout_const: 1. / extracted.grid.fadeout_distance,
                 dot_fadeout_const: 1. / extracted.grid.dot_fadeout_strength,
@@ -349,7 +370,7 @@ fn prepare_infinite_grids(
         commands
             .entity(entity)
             .insert(PerCameraSettingsUniformOffset {
-                offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
+                offset: settings_uniform_writer.write(&GridDisplaySettingsUniform {
                     scale: settings.scale,
                     dist_fadeout_const: 1. / settings.fadeout_distance,
                     dot_fadeout_const: 1. / settings.dot_fadeout_strength,
@@ -360,14 +381,6 @@ fn prepare_infinite_grids(
                 }),
             });
     }
-
-    position_uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue);
-
-    settings_uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue);
 }
 
 fn prepare_grid_shadows(
@@ -377,7 +390,15 @@ fn prepare_grid_shadows(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) {
-    uniforms.uniforms.clear();
+    let grids_iter = grids.iter();
+    let Some(mut uniform_writer) =
+        uniforms
+            .uniforms
+            .get_writer(grids_iter.len(), &render_device, &render_queue)
+    else {
+        return;
+    };
+
     for (entity, extracted, intersect) in grids.iter() {
         let transform = extracted.transform;
         let normal = transform.up();
@@ -389,7 +410,7 @@ fn prepare_grid_shadows(
         // makes shadow_color: None unusable.
         if let Some(grid_shadow_color) = extracted.grid.shadow_color {
             commands.entity(entity).insert(GridShadowUniformOffset {
-                offset: uniforms.uniforms.push(GridShadowUniform {
+                offset: uniform_writer.write(&GridShadowUniform {
                     shadow_color: Vec4::from_slice(&grid_shadow_color.as_rgba_f32()),
                     shadow_collapse_matrix: Mat3::from_cols(
                         normal.cross(-intersect.up_dir),
@@ -404,10 +425,6 @@ fn prepare_grid_shadows(
             });
         }
     }
-
-    uniforms
-        .uniforms
-        .write_buffer(&render_device, &render_queue);
 }
 
 #[allow(clippy::too_many_arguments)]
