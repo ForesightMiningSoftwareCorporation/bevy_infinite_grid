@@ -727,5 +727,5 @@ pub fn render_app_builder(app: &mut App) {
             (queue_infinite_grids, queue_grid_view_bind_groups).in_set(RenderSet::Queue),
         );
 
-    shadow::register_shadow(app);
+    // shadow::register_shadow(app);
 }
