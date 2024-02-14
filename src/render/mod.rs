@@ -286,22 +286,9 @@ fn extract_infinite_grids(
                         grid: *grid,
                     },
                     visible_entities.clone(),
-                    RenderPhase::<GridShadow>::default(),
                 ),
             )
         })
-        .collect();
-    commands.insert_or_spawn_batch(extracted);
-}
-
-fn extract_grid_shadows(
-    mut commands: Commands,
-    grids: Extract<Query<(Entity, &InfiniteGridSettings, &GridFrustumIntersect)>>,
-) {
-    let extracted: Vec<_> = grids
-        .iter()
-        .filter(|(_, grid_settings, _)| grid_settings.shadow_color.is_some())
-        .map(|(entity, _, intersect)| (entity, (*intersect,)))
         .collect();
     commands.insert_or_spawn_batch(extracted);
 }
@@ -708,16 +695,13 @@ pub fn render_app_builder(app: &mut App) {
         .init_resource::<InfiniteGridPipeline>()
         .init_resource::<SpecializedRenderPipelines<InfiniteGridPipeline>>()
         .add_render_command::<Transparent3d, DrawInfiniteGrid>()
-        .add_systems(
-            ExtractSchedule,
-            (extract_grid_shadows, extract_infinite_grids).chain(), // order to minimize move overhead
-        )
+        .add_systems(ExtractSchedule, extract_infinite_grids)
         .add_systems(ExtractSchedule, extract_per_camera_settings)
         .add_systems(
             Render,
             (
                 prepare_infinite_grids,
-                prepare_grid_shadows,
+                // prepare_grid_shadows,
                 prepare_grid_view_bind_groups,
             )
                 .in_set(RenderSet::Prepare),
