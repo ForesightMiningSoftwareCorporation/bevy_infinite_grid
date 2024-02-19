@@ -18,5 +18,4 @@ jobs:
     with:
       publish: ${{ (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)) && 'true' || 'false' }}
       publish_public_registry: true
-      toolchain: "1.70"
     secrets: inherit
