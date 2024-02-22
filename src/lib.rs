@@ -232,7 +232,7 @@ fn track_caster_visibility(
         (
             Entity,
             &Visibility,
-            &mut InheritedVisibility,
+            &mut ViewVisibility,
             Option<(&GlobalTransform, &Aabb)>,
         ),
         (With<Handle<Mesh>>, Without<NotShadowCaster>),
@@ -240,14 +240,14 @@ fn track_caster_visibility(
 ) {
     for (mut visibles, _grid_transform, _grid) in grids.iter_mut() {
         visibles.entities.clear();
-        for (entity, visibility, mut inherited_visibility, _intersect_testable) in meshes.iter_mut()
+        for (entity, visibility, mut view_visibility, _intersect_testable) in meshes.iter_mut()
         {
             if let Visibility::Hidden = visibility {
                 continue;
             }
 
             // TODO: add a check here for if the projection of the aabb onto the plane has any overlap with the grid frustum intersect
-            *inherited_visibility = InheritedVisibility::VISIBLE;
+            view_visibility.set();
             visibles.entities.push(entity);
         }
     }
