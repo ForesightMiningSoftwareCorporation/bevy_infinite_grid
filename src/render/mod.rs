@@ -22,11 +22,11 @@ use bevy::{
             RenderPhase, SetItemPipeline,
         },
         render_resource::{
-            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
-            BindGroupLayoutEntry, BindingType, BlendState, BufferBindingType, BufferSize,
-            ColorTargetState, ColorWrites, CompareFunction, DepthBiasState, DepthStencilState,
-            DynamicUniformBuffer, FragmentState, MultisampleState, PipelineCache, PolygonMode,
-            PrimitiveState, RenderPipelineDescriptor, SamplerBindingType, ShaderStages, ShaderType,
+            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
+            BlendState, BufferBindingType, BufferSize, ColorTargetState, ColorWrites,
+            CompareFunction, DepthBiasState, DepthStencilState, DynamicUniformBuffer,
+            FragmentState, MultisampleState, PipelineCache, PolygonMode, PrimitiveState,
+            RenderPipelineDescriptor, SamplerBindingType, ShaderStages, ShaderType,
             SpecializedRenderPipeline, SpecializedRenderPipelines, StencilFaceState, StencilState,
             TextureFormat, TextureSampleType, TextureViewDimension, VertexState,
         },
@@ -143,14 +143,14 @@ struct SetGridViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridViewBindGroup<I> {
     type Param = ();
-    type ViewWorldQuery = (Read<GridViewUniformOffset>, Read<GridViewBindGroup>);
-    type ItemWorldQuery = ();
+    type ViewQuery = (Read<GridViewUniformOffset>, Read<GridViewBindGroup>);
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        (view_uniform, bind_group): ROQueryItem<'w, Self::ViewWorldQuery>,
-        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        (view_uniform, bind_group): ROQueryItem<'w, Self::ViewQuery>,
+        _entity: ROQueryItem<'w, Option<Self::ItemQuery>>,
         _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -164,27 +164,29 @@ struct SetInfiniteGridBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetInfiniteGridBindGroup<I> {
     type Param = SRes<InfiniteGridBindGroup>;
-    type ViewWorldQuery = Option<Read<PerCameraSettingsUniformOffset>>;
-    type ItemWorldQuery = Read<InfiniteGridUniformOffsets>;
+    type ViewQuery = Option<Read<PerCameraSettingsUniformOffset>>;
+    type ItemQuery = Read<InfiniteGridUniformOffsets>;
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        camera_settings_offset: ROQueryItem<'w, Self::ViewWorldQuery>,
-        base_offsets: ROQueryItem<'w, Self::ItemWorldQuery>,
+        camera_settings_offset: ROQueryItem<'w, Self::ViewQuery>,
+        base_offsets: ROQueryItem<'w, Option<Self::ItemQuery>>,
         bind_group: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        pass.set_bind_group(
-            I,
-            &bind_group.into_inner().value,
-            &[
-                base_offsets.position_offset,
-                camera_settings_offset
-                    .map(|cs| cs.offset)
-                    .unwrap_or(base_offsets.settings_offset),
-            ],
-        );
+        if let Some(base_offsets) = base_offsets {
+            pass.set_bind_group(
+                I,
+                &bind_group.into_inner().value,
+                &[
+                    base_offsets.position_offset,
+                    camera_settings_offset
+                        .map(|cs| cs.offset)
+                        .unwrap_or(base_offsets.settings_offset),
+                ],
+            );
+        }
         RenderCommandResult::Success
     }
 }
@@ -193,14 +195,14 @@ struct FinishDrawInfiniteGrid;
 
 impl<P: PhaseItem> RenderCommand<P> for FinishDrawInfiniteGrid {
     type Param = ();
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = ();
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: ROQueryItem<'w, Option<Self::ItemQuery>>,
         _param: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -222,7 +224,7 @@ fn prepare_grid_view_uniforms(
         let view = camera.transform.compute_matrix();
         let inverse_view = view.inverse();
         commands.entity(entity).insert(GridViewUniformOffset {
-            offset: view_uniforms.uniforms.push(GridViewUniform {
+            offset: view_uniforms.uniforms.push(&GridViewUniform {
                 projection,
                 view,
                 inverse_view,
@@ -328,20 +330,26 @@ fn prepare_infinite_grids(
         let normal = transform.up();
         let rot_matrix = Mat3::from_quat(t.rotation.inverse());
         commands.entity(entity).insert(InfiniteGridUniformOffsets {
-            position_offset: position_uniforms.uniforms.push(InfiniteGridUniform {
+            position_offset: position_uniforms.uniforms.push(&InfiniteGridUniform {
                 rot_matrix,
                 offset,
                 normal,
             }),
-            settings_offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
-                scale: extracted.grid.scale,
-                dist_fadeout_const: 1. / extracted.grid.fadeout_distance,
-                dot_fadeout_const: 1. / extracted.grid.dot_fadeout_strength,
-                x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
-                z_axis_color: Vec3::from_slice(&extracted.grid.z_axis_color.as_rgba_f32()),
-                minor_line_color: Vec4::from_slice(&extracted.grid.minor_line_color.as_rgba_f32()),
-                major_line_color: Vec4::from_slice(&extracted.grid.major_line_color.as_rgba_f32()),
-            }),
+            settings_offset: settings_uniforms
+                .uniforms
+                .push(&GridDisplaySettingsUniform {
+                    scale: extracted.grid.scale,
+                    dist_fadeout_const: 1. / extracted.grid.fadeout_distance,
+                    dot_fadeout_const: 1. / extracted.grid.dot_fadeout_strength,
+                    x_axis_color: Vec3::from_slice(&extracted.grid.x_axis_color.as_rgba_f32()),
+                    z_axis_color: Vec3::from_slice(&extracted.grid.z_axis_color.as_rgba_f32()),
+                    minor_line_color: Vec4::from_slice(
+                        &extracted.grid.minor_line_color.as_rgba_f32(),
+                    ),
+                    major_line_color: Vec4::from_slice(
+                        &extracted.grid.major_line_color.as_rgba_f32(),
+                    ),
+                }),
         });
     }
 
@@ -349,15 +357,21 @@ fn prepare_infinite_grids(
         commands
             .entity(entity)
             .insert(PerCameraSettingsUniformOffset {
-                offset: settings_uniforms.uniforms.push(GridDisplaySettingsUniform {
-                    scale: settings.scale,
-                    dist_fadeout_const: 1. / settings.fadeout_distance,
-                    dot_fadeout_const: 1. / settings.dot_fadeout_strength,
-                    x_axis_color: Vec3::from_slice(&settings.x_axis_color.as_rgba_f32()),
-                    z_axis_color: Vec3::from_slice(&settings.z_axis_color.as_rgba_f32()),
-                    minor_line_color: Vec4::from_slice(&settings.minor_line_color.as_rgba_f32()),
-                    major_line_color: Vec4::from_slice(&settings.major_line_color.as_rgba_f32()),
-                }),
+                offset: settings_uniforms
+                    .uniforms
+                    .push(&GridDisplaySettingsUniform {
+                        scale: settings.scale,
+                        dist_fadeout_const: 1. / settings.fadeout_distance,
+                        dot_fadeout_const: 1. / settings.dot_fadeout_strength,
+                        x_axis_color: Vec3::from_slice(&settings.x_axis_color.as_rgba_f32()),
+                        z_axis_color: Vec3::from_slice(&settings.z_axis_color.as_rgba_f32()),
+                        minor_line_color: Vec4::from_slice(
+                            &settings.minor_line_color.as_rgba_f32(),
+                        ),
+                        major_line_color: Vec4::from_slice(
+                            &settings.major_line_color.as_rgba_f32(),
+                        ),
+                    }),
             });
     }
 
@@ -389,7 +403,7 @@ fn prepare_grid_shadows(
         // makes shadow_color: None unusable.
         if let Some(grid_shadow_color) = extracted.grid.shadow_color {
             commands.entity(entity).insert(GridShadowUniformOffset {
-                offset: uniforms.uniforms.push(GridShadowUniform {
+                offset: uniforms.uniforms.push(&GridShadowUniform {
                     shadow_color: Vec4::from_slice(&grid_shadow_color.as_rgba_f32()),
                     shadow_collapse_matrix: Mat3::from_cols(
                         normal.cross(-intersect.up_dir),
@@ -517,9 +531,9 @@ struct InfiniteGridPipeline {
 impl FromWorld for InfiniteGridPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("grid-view-bind-group-layout"),
-            entries: &[BindGroupLayoutEntry {
+        let view_layout = render_device.create_bind_group_layout(
+            "grid-view-bind-group-layout",
+            &[BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 ty: BindingType::Buffer {
@@ -529,70 +543,66 @@ impl FromWorld for InfiniteGridPipeline {
                 },
                 count: None,
             }],
-        });
-        let infinite_grid_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("infinite-grid-bind-group-layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: true,
-                            min_binding_size: BufferSize::new(
-                                InfiniteGridUniform::min_size().into(),
-                            ),
-                        },
-                        count: None,
+        );
+        let infinite_grid_layout = render_device.create_bind_group_layout(
+            "infinite-grid-bind-group-layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: BufferSize::new(InfiniteGridUniform::min_size().into()),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: true,
-                            min_binding_size: BufferSize::new(
-                                GridDisplaySettingsUniform::min_size().into(),
-                            ),
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: BufferSize::new(
+                            GridDisplaySettingsUniform::min_size().into(),
+                        ),
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        );
 
-        let grid_shadows_layout =
-            render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("grid-shadows-bind-group-layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: true,
-                            min_binding_size: BufferSize::new(GridShadowUniform::min_size().into()),
-                        },
-                        count: None,
+        let grid_shadows_layout = render_device.create_bind_group_layout(
+            "grid-shadows-bind-group-layout",
+            &[
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: true,
+                        min_binding_size: BufferSize::new(GridShadowUniform::min_size().into()),
                     },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
                     },
-                    BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            });
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        );
 
         Self {
             view_layout,

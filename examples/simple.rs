@@ -44,7 +44,9 @@ fn setup_system(
     // cube
     commands.spawn(PbrBundle {
         material: mat.clone(),
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        mesh: meshes.add(Cuboid {
+            half_size: Vec3::splat(0.5),
+        }),
         transform: Transform {
             translation: Vec3::new(3., 4., 0.),
             rotation: Quat::from_rotation_arc(Vec3::Y, Vec3::ONE.normalize()),
@@ -55,7 +57,9 @@ fn setup_system(
 
     commands.spawn(PbrBundle {
         material: mat.clone(),
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
+        mesh: meshes.add(Cuboid {
+            half_size: Vec3::ONE,
+        }),
         transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
     });
@@ -97,8 +101,8 @@ mod camera_controller {
     fn camera_controller(
         time: Res<Time>,
         mut mouse_events: EventReader<MouseMotion>,
-        mouse_button_input: Res<Input<MouseButton>>,
-        key_input: Res<Input<KeyCode>>,
+        mouse_button_input: Res<ButtonInput<MouseButton>>,
+        key_input: Res<ButtonInput<KeyCode>>,
         mut query: Query<(&mut Transform, &mut CameraController), With<Camera>>,
     ) {
         let dt = time.delta_seconds();
@@ -106,22 +110,22 @@ mod camera_controller {
         if let Ok((mut transform, mut state)) = query.get_single_mut() {
             // Handle key input
             let mut axis_input = Vec3::ZERO;
-            if key_input.pressed(KeyCode::W) {
+            if key_input.pressed(KeyCode::KeyW) {
                 axis_input.z += 1.0;
             }
-            if key_input.pressed(KeyCode::S) {
+            if key_input.pressed(KeyCode::KeyS) {
                 axis_input.z -= 1.0;
             }
-            if key_input.pressed(KeyCode::D) {
+            if key_input.pressed(KeyCode::KeyD) {
                 axis_input.x += 1.0;
             }
-            if key_input.pressed(KeyCode::A) {
+            if key_input.pressed(KeyCode::KeyA) {
                 axis_input.x -= 1.0;
             }
-            if key_input.pressed(KeyCode::E) {
+            if key_input.pressed(KeyCode::KeyE) {
                 axis_input.y += 1.0;
             }
-            if key_input.pressed(KeyCode::Q) {
+            if key_input.pressed(KeyCode::KeyQ) {
                 axis_input.y -= 1.0;
             }
 
@@ -139,8 +143,8 @@ mod camera_controller {
                     state.velocity = Vec3::ZERO;
                 }
             }
-            let forward = transform.forward();
-            let right = transform.right();
+            let forward = *transform.forward();
+            let right = *transform.right();
             transform.translation += state.velocity.x * dt * right
                 + state.velocity.y * dt * Vec3::Y
                 + state.velocity.z * dt * forward;
