@@ -240,8 +240,7 @@ fn track_caster_visibility(
 ) {
     for (mut visibles, _grid_transform, _grid) in grids.iter_mut() {
         visibles.entities.clear();
-        for (entity, visibility, mut view_visibility, _intersect_testable) in meshes.iter_mut()
-        {
+        for (entity, visibility, mut view_visibility, _intersect_testable) in meshes.iter_mut() {
             if let Visibility::Hidden = visibility {
                 continue;
             }
