@@ -1,8 +1,9 @@
-use bevy::prelude::*;
+use bevy::{math::primitives, prelude::*};
 use bevy_infinite_grid::{
-    GridShadowCamera, InfiniteGridBundle, InfiniteGridPlugin, InfiniteGridSettings,
+    InfiniteGridBundle, InfiniteGridPlugin, InfiniteGridSettings,
 };
 use camera_controller::{CameraController, CameraControllerPlugin};
+
 
 fn main() {
     App::new()
@@ -18,7 +19,6 @@ fn setup_system(
 ) {
     commands.spawn(InfiniteGridBundle {
         settings: InfiniteGridSettings {
-            // shadow_color: None,
             ..default()
         },
         ..default()
@@ -30,7 +30,6 @@ fn setup_system(
             ..default()
         },
         CameraController::default(),
-        GridShadowCamera,
     ));
 
     commands.spawn(DirectionalLightBundle {
@@ -44,7 +43,7 @@ fn setup_system(
     // cube
     commands.spawn(PbrBundle {
         material: mat.clone(),
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        mesh: meshes.add(Mesh::from(primitives::Cuboid { half_size: Vec3::new(2.0, 2.0, 2.0) })),
         transform: Transform {
             translation: Vec3::new(3., 4., 0.),
             rotation: Quat::from_rotation_arc(Vec3::Y, Vec3::ONE.normalize()),
@@ -55,7 +54,7 @@ fn setup_system(
 
     commands.spawn(PbrBundle {
         material: mat.clone(),
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 2.0 })),
+        mesh: meshes.add(Mesh::from(primitives::Cuboid { half_size: Vec3::new(2.0, 2.0, 2.0) })),
         transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
     });
@@ -97,8 +96,8 @@ mod camera_controller {
     fn camera_controller(
         time: Res<Time>,
         mut mouse_events: EventReader<MouseMotion>,
-        mouse_button_input: Res<Input<MouseButton>>,
-        key_input: Res<Input<KeyCode>>,
+        mouse_button_input: Res<ButtonInput<MouseButton>>,
+        key_input: Res<ButtonInput<KeyCode>>,
         mut query: Query<(&mut Transform, &mut CameraController), With<Camera>>,
     ) {
         let dt = time.delta_seconds();
@@ -106,22 +105,22 @@ mod camera_controller {
         if let Ok((mut transform, mut state)) = query.get_single_mut() {
             // Handle key input
             let mut axis_input = Vec3::ZERO;
-            if key_input.pressed(KeyCode::W) {
+            if key_input.pressed(KeyCode::KeyW) {
                 axis_input.z += 1.0;
             }
-            if key_input.pressed(KeyCode::S) {
+            if key_input.pressed(KeyCode::KeyS) {
                 axis_input.z -= 1.0;
             }
-            if key_input.pressed(KeyCode::D) {
+            if key_input.pressed(KeyCode::KeyD) {
                 axis_input.x += 1.0;
             }
-            if key_input.pressed(KeyCode::A) {
+            if key_input.pressed(KeyCode::KeyA) {
                 axis_input.x -= 1.0;
             }
-            if key_input.pressed(KeyCode::E) {
+            if key_input.pressed(KeyCode::KeyE) {
                 axis_input.y += 1.0;
             }
-            if key_input.pressed(KeyCode::Q) {
+            if key_input.pressed(KeyCode::KeyQ) {
                 axis_input.y -= 1.0;
             }
 
@@ -141,9 +140,9 @@ mod camera_controller {
             }
             let forward = transform.forward();
             let right = transform.right();
-            transform.translation += state.velocity.x * dt * right
+            transform.translation += right * state.velocity.x * dt 
                 + state.velocity.y * dt * Vec3::Y
-                + state.velocity.z * dt * forward;
+                + forward * state.velocity.z * dt;
 
             // Handle mouse input
             let mut mouse_delta = Vec2::ZERO;

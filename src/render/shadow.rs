@@ -1,21 +1,15 @@
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
 use bevy::{
-    ecs::{
+    core_pipeline::core_3d::graph::{Core3d, Node3d}, ecs::{
         query::ROQueryItem,
         system::{
             lifetimeless::{Read, SRes},
             SystemParamItem,
         },
-    },
-    pbr::{
-        setup_morph_and_skinning_defs, DrawMesh, MaterialPipeline, MaterialPipelineKey,
-        MeshLayouts, MeshPipeline, MeshPipelineKey, RenderMaterialInstances, RenderMaterials,
-        RenderMeshInstances, SetMaterialBindGroup, SetMeshBindGroup, MAX_CASCADES_PER_LIGHT,
-        MAX_DIRECTIONAL_LIGHTS,
-    },
-    prelude::*,
-    render::{
+    }, pbr::{
+        setup_morph_and_skinning_defs, DrawMesh, MaterialPipeline, MaterialPipelineKey, MeshLayouts, MeshPipeline, MeshPipelineKey, RenderMaterialInstances, RenderMaterials, RenderMeshInstances, SetMaterialBindGroup, SetMeshBindGroup, MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS
+    }, prelude::*, render::{
         batching::batch_and_prepare_render_phase,
         camera::CameraProjection,
         mesh::MeshVertexBufferLayout,
@@ -26,15 +20,7 @@ use bevy::{
             PhaseItem, RenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
         },
         render_resource::{
-            AddressMode, AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayout,
-            BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType, BufferBindingType,
-            BufferSize, CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d,
-            FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations,
-            PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment,
-            RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor,
-            ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline,
-            SpecializedMeshPipelineError, SpecializedMeshPipelines, TextureDescriptor,
-            TextureDimension, TextureFormat, TextureUsages, TextureView, VertexState,
+            AddressMode, AsBindGroup, BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType, BufferBindingType, BufferSize, CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d, FilterMode, FragmentState, FrontFace, LoadOp, MultisampleState, Operations, PipelineCache, PolygonMode, PrimitiveState, RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerDescriptor, ShaderDefVal, ShaderStages, ShaderType, SpecializedMeshPipeline, SpecializedMeshPipelineError, SpecializedMeshPipelines, StoreOp, TextureDescriptor, TextureDimension, TextureFormat, TextureUsages, TextureView, VertexState
         },
         renderer::RenderDevice,
         texture::TextureCache,
@@ -43,11 +29,12 @@ use bevy::{
             ViewUniforms, VisibleEntities,
         },
         Render, RenderApp, RenderSet,
-    },
-    utils::{nonmax::NonMaxU32, FloatOrd},
+    }, utils::{nonmax::NonMaxU32, FloatOrd}
 };
 
 use crate::{GlobalInfiniteGridSettings, GridFrustumIntersect};
+
+use self::graph::NodeGridShadow;
 
 use super::{
     ExtractedInfiniteGrid, GridShadowUniformOffset, GridShadowUniforms, InfiniteGridPipeline,
@@ -121,8 +108,9 @@ impl FromWorld for GridShadowPipeline {
         let world = world.cell();
         let render_device = world.get_resource::<RenderDevice>().unwrap();
 
-        let view_layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            entries: &[
+        let view_layout = render_device.create_bind_group_layout( 
+            Some("grid_shadow_view_layout"),
+            &[
                 // View
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -134,16 +122,14 @@ impl FromWorld for GridShadowPipeline {
                     },
                     count: None,
                 },
-            ],
-            label: Some("grid_shadow_view_layout"),
-        });
+            ]
+        );
 
         let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap();
         let material_pipeline = world
             .get_resource::<MaterialPipeline<StandardMaterial>>()
             .unwrap()
             .clone();
-
         GridShadowPipeline {
             view_layout,
             mesh_layouts: mesh_pipeline.mesh_layouts.clone(),
@@ -165,17 +151,16 @@ impl FromWorld for GridShadowPipeline {
 
 impl SpecializedMeshPipeline for GridShadowPipeline {
     type Key = MaterialPipelineKey<StandardMaterial>;
-
+    
     fn specialize(
         &self,
         key: Self::Key,
         layout: &MeshVertexBufferLayout,
     ) -> Result<RenderPipelineDescriptor, SpecializedMeshPipelineError> {
+
         let mut vertex_attributes = vec![Mesh::ATTRIBUTE_POSITION.at_shader_location(0)];
 
         let mut bind_group_layouts = vec![self.view_layout.clone()];
-
-        bind_group_layouts.insert(1, self.material_layout.clone());
 
         let mut shader_defs = vec![
             ShaderDefVal::UInt(
@@ -189,7 +174,7 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
         ];
 
         bind_group_layouts.insert(
-            2,
+            1,
             setup_morph_and_skinning_defs(
                 &self.mesh_layouts,
                 layout,
@@ -199,6 +184,10 @@ impl SpecializedMeshPipeline for GridShadowPipeline {
                 &mut vertex_attributes,
             ),
         );
+
+        bind_group_layouts.insert(2, self.material_layout.clone());
+
+
 
         let vertex_buffer_layout = layout.get_layout(&vertex_attributes)?;
 
@@ -249,8 +238,8 @@ struct GridShadowMeta {
 type DrawGridShadowMesh = (
     SetItemPipeline,
     SetGridShadowViewBindGroup<0>,
-    SetMaterialBindGroup<StandardMaterial, 1>,
-    SetMeshBindGroup<2>,
+    SetMeshBindGroup<1>,
+    SetMaterialBindGroup<StandardMaterial, 2>,
     DrawMesh,
 );
 
@@ -258,14 +247,14 @@ struct SetGridShadowViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowViewBindGroup<I> {
     type Param = SRes<GridShadowMeta>;
-    type ViewWorldQuery = Read<ViewUniformOffset>;
-    type ItemWorldQuery = ();
+    type ViewQuery = Read<ViewUniformOffset>;
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        view_uniform_offset: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _entity: ROQueryItem<'w, Self::ItemWorldQuery>,
+        view_uniform_offset: ROQueryItem<'w, Self::ViewQuery>,
+        _entity: Option<()>,
         meta: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -277,6 +266,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowViewBindGro
 
         RenderCommandResult::Success
     }
+
 }
 
 #[derive(Component)]
@@ -467,21 +457,33 @@ pub struct SetGridShadowBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridShadowBindGroup<I> {
     type Param = ();
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = Option<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
+    type ViewQuery = ();
+    type ItemQuery = Option<(Read<GridShadowBindGroup>, Read<GridShadowUniformOffset>)>;
 
     #[inline]
     fn render<'w>(
         _item: &P,
-        _view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        bg_offset: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _view: ROQueryItem<'w, Self::ViewQuery>,
+        bg_offset:  Option<ROQueryItem<'w, Self::ItemQuery>>,
         _query: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut bevy::render::render_phase::TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
+        let Some(bg_offset) = bg_offset else {
+            return RenderCommandResult::Failure;
+        };
         if let Some((bg, offset)) = bg_offset {
             pass.set_bind_group(I, &bg.bind_group, &[offset.offset]);
         }
         RenderCommandResult::Success
+    }
+}
+
+pub mod graph {
+    use bevy::render::render_graph::RenderLabel;
+
+    #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+    pub enum NodeGridShadow {
+        GridShadowPass
     }
 }
 
@@ -531,10 +533,12 @@ impl Node for GridShadowPassNode {
                     resolve_target: None,
                     ops: Operations {
                         load: LoadOp::Clear(Color::BLACK.into()),
-                        store: true,
+                        store: StoreOp::Store,//修订
                     },
                 })],
                 depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
             };
 
             let mut tracked_render_pass = render_context.begin_tracked_render_pass(pass_descriptor);
@@ -607,11 +611,12 @@ pub fn register_shadow(app: &mut App) {
     let grid_shadow_pass_node = GridShadowPassNode::new(&mut render_app.world);
     let mut graph = render_app.world.resource_mut::<RenderGraph>();
     let draw_3d_graph = graph
-        .get_sub_graph_mut(bevy::core_pipeline::core_3d::graph::NAME)
+        .get_sub_graph_mut(Core3d)
         .unwrap();
-    draw_3d_graph.add_node(GridShadowPassNode::NAME, grid_shadow_pass_node);
+    draw_3d_graph.add_node(NodeGridShadow::GridShadowPass, grid_shadow_pass_node);
     draw_3d_graph.add_node_edge(
-        GridShadowPassNode::NAME,
-        bevy::core_pipeline::core_3d::graph::node::END_MAIN_PASS,
+        NodeGridShadow::GridShadowPass,
+        Node3d::EndMainPass
     );
+
 }
