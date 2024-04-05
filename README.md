@@ -50,12 +50,22 @@ commands.spawn(InfiniteGridBundle::new(
 
 See the [simple](examples/simple.rs) demo for an example of a minimal implementation.
 
-# License
+## Bevy Version Support
+
+We intend to track the `main` branch of Bevy. PRs supporting this are welcome!
+
+| bevy | bevy_infinite_grid |
+| ---- | ------------------ |
+| 0.13 | 0.11               |
+| 0.12 | 0.10               |
+| 0.11 | 0.8, 0.9           |
+
+## License
 
 bevy_infinite_grid is free and open source! All code in this repository is dual-licensed under either:
 
-* MIT License (LICENSE-MIT or <http://opensource.org/licenses/MIT>)
-* Apache License, Version 2.0 (LICENSE-APACHE or <http://www.apache.org/licenses/LICENSE-2.0>)
+* MIT License ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
+* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))
 
 at your option. This means you can select the license you prefer! This dual-licensing approach is the de-facto standard in the Rust ecosystem and there are very good reasons to include both.
 
@@ -65,4 +75,6 @@ Unless you explicitly state otherwise, any contribution intentionally submitted 
 
 The creation and maintenance of Bevy Infinite Grid is sponsored by Foresight Spatial Labs.
 
-<img src="https://avatars.githubusercontent.com/u/83515353?s=200&v=4" alt="Foresight Spatial Labs" width="480">
+<div align="center">
+<img width="480" src="https://github.com/ForesightMiningSoftwareCorporation/bevy_polyline/assets/2632925/035000f5-94bb-4e8a-9ae1-8f830a331d03"/>
+</div>
