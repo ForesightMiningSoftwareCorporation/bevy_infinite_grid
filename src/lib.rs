@@ -178,7 +178,6 @@ fn track_frustum_intersect_system(
         } else {
             horizon_sign
         };
-        // let horizon = horizon_sign;
 
         let seeds = [
             Vec2::new(1., horizon),

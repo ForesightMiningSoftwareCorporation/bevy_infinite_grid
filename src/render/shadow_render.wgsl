@@ -2,17 +2,11 @@
 #import bevy_pbr::mesh_types::Mesh
 #import bevy_render::view::View
 
-@group(0) @binding(0)
-var<uniform> view: View;
+@group(0) @binding(0) var<uniform> view: View;
 
-@group(1) @binding(0)
-var<uniform> mesh: Mesh;
+#import bevy_pbr::mesh_bindings
 
-#ifdef SKINNED
-@group(1) @binding(1)
-var<uniform> joint_matrices: SkinnedMesh;
 #import bevy_pbr::skinning
-#endif
 
 #import bevy_pbr::pbr_bindings
 
