@@ -33,23 +33,17 @@ struct View {
     world_position: vec3<f32>,
 };
 
-@group(0) @binding(0)
-var<uniform> view: View;
+@group(0) @binding(0) var<uniform> view: View;
 
-@group(1) @binding(0)
-var<uniform> grid_position: InfiniteGridPosition;
-@group(1) @binding(1)
-var<uniform> grid_settings: InfiniteGridSettings;
+@group(1) @binding(0) var<uniform> grid_position: InfiniteGridPosition;
+@group(1) @binding(1) var<uniform> grid_settings: InfiniteGridSettings;
 
 #ifdef SHADOWS
-@group(2) @binding(0)
-var<uniform> grid_shadow: GridShadow;
+@group(2) @binding(0) var<uniform> grid_shadow: GridShadow;
 
-@group(2) @binding(1)
-var grid_shadow_texture: texture_2d<f32>;
+@group(2) @binding(1) var grid_shadow_texture: texture_2d<f32>;
 
-@group(2) @binding(2)
-var grid_shadow_sampler: sampler;
+@group(2) @binding(2) var grid_shadow_sampler: sampler;
 #endif
 
 struct Vertex {
