@@ -1,14 +1,11 @@
 use bevy::prelude::*;
-use bevy_infinite_grid::{
-    GridShadowCamera, InfiniteGridBundle, InfiniteGridPlugin, InfiniteGridSettings,
-};
+use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 use camera_controller::{CameraController, CameraControllerPlugin};
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, CameraControllerPlugin, InfiniteGridPlugin))
         .add_systems(Startup, setup_system)
-        .add_systems(Update, toggle_shadows)
         .run();
 }
 
@@ -25,7 +22,6 @@ fn setup_system(
             ..default()
         },
         CameraController::default(),
-        GridShadowCamera,
     ));
 
     commands.spawn(DirectionalLightBundle {
@@ -54,21 +50,6 @@ fn setup_system(
         transform: Transform::from_xyz(0.0, 2.0, 0.0),
         ..default()
     });
-}
-
-fn toggle_shadows(
-    input: Res<ButtonInput<KeyCode>>,
-    mut grid_settings: Query<&mut InfiniteGridSettings>,
-) {
-    if input.just_pressed(KeyCode::KeyT) {
-        for mut grid_settings in &mut grid_settings {
-            grid_settings.shadow_color = if grid_settings.shadow_color.is_none() {
-                InfiniteGridSettings::default().shadow_color
-            } else {
-                None
-            };
-        }
-    }
 }
 
 // This is a simplified version of the camera controller used in bevy examples
