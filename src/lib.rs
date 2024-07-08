@@ -9,12 +9,17 @@ use bevy::{
 pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
-    fn build(&self, _app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        app.init_resource::<GlobalInfiniteGridSettings>();
+    }
 
     fn finish(&self, app: &mut App) {
         render::render_app_builder(app);
     }
 }
+
+#[derive(Resource, Default)]
+pub struct GlobalInfiniteGridSettings {}
 
 #[derive(Component, Default)]
 pub struct InfiniteGrid;
