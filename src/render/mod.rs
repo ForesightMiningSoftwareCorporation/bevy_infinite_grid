@@ -15,8 +15,8 @@ use bevy::{
     render::{
         mesh::PrimitiveTopology,
         render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItem, RenderCommand, RenderCommandResult,
-            RenderPhase, SetItemPipeline,
+            AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
+            RenderCommandResult, SetItemPipeline, ViewSortedRenderPhases,
         },
         render_resource::{
             binding_types::uniform_buffer, BindGroup, BindGroupEntries, BindGroupLayout,
@@ -40,7 +40,7 @@ const GRID_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(15204473893972
 pub fn render_app_builder(app: &mut App) {
     load_internal_asset!(app, GRID_SHADER_HANDLE, "grid.wgsl", Shader::from_wgsl);
 
-    let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+    let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
         return;
     };
     render_app
@@ -101,10 +101,10 @@ impl GridDisplaySettingsUniform {
             scale: settings.scale,
             dist_fadeout_const: 1. / settings.fadeout_distance,
             dot_fadeout_const: 1. / settings.dot_fadeout_strength,
-            x_axis_color: Vec3::from_slice(&settings.x_axis_color.as_rgba_f32()),
-            z_axis_color: Vec3::from_slice(&settings.z_axis_color.as_rgba_f32()),
-            minor_line_color: Vec4::from_slice(&settings.minor_line_color.as_rgba_f32()),
-            major_line_color: Vec4::from_slice(&settings.major_line_color.as_rgba_f32()),
+            x_axis_color: settings.x_axis_color.to_linear().to_vec3(),
+            z_axis_color: settings.z_axis_color.to_linear().to_vec3(),
+            minor_line_color: settings.minor_line_color.to_linear().to_vec4(),
+            major_line_color: settings.major_line_color.to_linear().to_vec4(),
         }
     }
 }
@@ -241,8 +241,8 @@ fn prepare_grid_view_uniforms(
 ) {
     view_uniforms.uniforms.clear();
     for (entity, camera) in views.iter() {
-        let projection = camera.projection;
-        let view = camera.transform.compute_matrix();
+        let projection = camera.clip_from_view;
+        let view = camera.world_from_view.compute_matrix();
         let inverse_view = view.inverse();
         commands.entity(entity).insert(GridViewUniformOffset {
             offset: view_uniforms.uniforms.push(&GridViewUniform {
@@ -250,7 +250,7 @@ fn prepare_grid_view_uniforms(
                 view,
                 inverse_view,
                 inverse_projection: projection.inverse(),
-                world_position: camera.transform.translation(),
+                world_position: camera.world_from_view.translation(),
             }),
         });
     }
@@ -341,7 +341,7 @@ fn prepare_infinite_grids(
             position_offset: position_uniforms.uniforms.push(&InfiniteGridUniform {
                 rot_matrix,
                 offset,
-                normal,
+                normal: *normal,
             }),
             settings_offset: settings_uniforms
                 .uniforms
@@ -398,11 +398,8 @@ fn queue_infinite_grids(
     pipeline: Res<InfiniteGridPipeline>,
     mut pipelines: ResMut<SpecializedRenderPipelines<InfiniteGridPipeline>>,
     infinite_grids: Query<&ExtractedInfiniteGrid>,
-    mut views: Query<(
-        &VisibleEntities,
-        &mut RenderPhase<Transparent3d>,
-        &ExtractedView,
-    )>,
+    mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
+    mut views: Query<(Entity, &VisibleEntities, &ExtractedView)>,
     msaa: Res<Msaa>,
 ) {
     let draw_function_id = transparent_draw_functions
@@ -410,7 +407,11 @@ fn queue_infinite_grids(
         .get_id::<DrawInfiniteGrid>()
         .unwrap();
 
-    for (entities, mut phase, view) in views.iter_mut() {
+    for (view_entity, entities, view) in views.iter_mut() {
+        let Some(phase) = transparent_render_phases.get_mut(&view_entity) else {
+            continue;
+        };
+
         let mesh_key = MeshPipelineKey::from_hdr(view.hdr);
         let pipeline_id = pipelines.specialize(
             &pipeline_cache,
@@ -420,10 +421,10 @@ fn queue_infinite_grids(
                 sample_count: msaa.samples(),
             },
         );
-        for &entity in &entities.entities {
+        for &entity in entities.iter::<With<InfiniteGridSettings>>() {
             if !infinite_grids
                 .get(entity)
-                .map(|grid| plane_check(&grid.transform, view.transform.translation()))
+                .map(|grid| plane_check(&grid.transform, view.world_from_view.translation()))
                 .unwrap_or(false)
             {
                 continue;
@@ -434,7 +435,7 @@ fn queue_infinite_grids(
                 draw_function: draw_function_id,
                 distance: f32::NEG_INFINITY,
                 batch_range: 0..1,
-                dynamic_offset: None,
+                extra_index: PhaseItemExtraIndex::NONE,
             });
         }
     }
