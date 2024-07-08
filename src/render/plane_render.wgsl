@@ -17,14 +17,6 @@ struct InfiniteGridSettings {
 
 };
 
-struct GridShadow {
-    shadow_col: vec4<f32>,
-    shadow_collapse_matrix: mat3x3<f32>,
-    shadow_center_pos: vec3<f32>,
-    shadow_texture_width: f32,
-    shadow_texture_height: f32,
-};
-
 struct View {
     projection: mat4x4<f32>,
     inverse_projection: mat4x4<f32>,
@@ -40,17 +32,6 @@ var<uniform> view: View;
 var<uniform> grid_position: InfiniteGridPosition;
 @group(1) @binding(1)
 var<uniform> grid_settings: InfiniteGridSettings;
-
-#ifdef SHADOWS
-@group(2) @binding(0)
-var<uniform> grid_shadow: GridShadow;
-
-@group(2) @binding(1)
-var grid_shadow_texture: texture_2d<f32>;
-
-@group(2) @binding(2)
-var grid_shadow_sampler: sampler;
-#endif
 
 struct Vertex {
     @builtin(vertex_index) index: u32,
@@ -117,19 +98,6 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     out.depth = clip_depth;
 
-    #ifdef SHADOWS
-    let grid_pos_relative_to_shadow_center = (grid_shadow.shadow_collapse_matrix * (frag_pos_3d - grid_shadow.shadow_center_pos)).xz;
-    let shadow_size = vec2<f32>(grid_shadow.shadow_texture_width, grid_shadow.shadow_texture_height);
-    let offset_location = grid_pos_relative_to_shadow_center / shadow_size;
-    let uv = offset_location + vec2<f32>(0.5);
-
-    let checks = step(vec2<f32>(1.), uv) + step(vec2<f32>(0.), -uv);
-    let inbounds = 1. - step(1., checks.x + checks.y);
-
-    let shadow = textureSample(grid_shadow_texture, grid_shadow_sampler, uv).r;
-    let shadow2 = 1. - shadow * inbounds;
-    #endif
-
     let scale = grid_settings.scale;
     let coord = plane_coords * scale; // use the scale variable to set the distance between the lines
     let derivative = fwidth(coord);
@@ -147,11 +115,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let base_grid_color = mix(grid_settings.major_line_col, grid_settings.minor_line_col, step(1., mg_line));
     let grid_color = vec4<f32>(base_grid_color.rgb, base_grid_color.a * grid_alpha);
 
-    #ifdef SHADOWS
-    var color = mix(grid_color, grid_shadow.shadow_col, 1. - shadow2);
-    #else
     var color = grid_color;
-    #endif
 
     let z_axis_cond = plane_coords.x > -1.0 * minimumx && plane_coords.x < 1.0 * minimumx;
     let x_axis_cond = plane_coords.y > -1.0 * minimumz && plane_coords.y < 1.0 * minimumz;

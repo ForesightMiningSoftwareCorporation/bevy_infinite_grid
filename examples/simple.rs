@@ -1,7 +1,5 @@
 use bevy::prelude::*;
-use bevy_infinite_grid::{
-    GridShadowCamera, InfiniteGridBundle, InfiniteGridPlugin, InfiniteGridSettings,
-};
+use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin, InfiniteGridSettings};
 use camera_controller::{CameraController, CameraControllerPlugin};
 
 fn main() {
@@ -17,10 +15,7 @@ fn setup_system(
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn(InfiniteGridBundle {
-        settings: InfiniteGridSettings {
-            // shadow_color: None,
-            ..default()
-        },
+        settings: InfiniteGridSettings { ..default() },
         ..default()
     });
 
@@ -30,7 +25,6 @@ fn setup_system(
             ..default()
         },
         CameraController::default(),
-        GridShadowCamera,
     ));
 
     commands.spawn(DirectionalLightBundle {
