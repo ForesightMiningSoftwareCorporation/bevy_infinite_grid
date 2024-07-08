@@ -18,8 +18,17 @@ impl Plugin for InfiniteGridPlugin {
     }
 }
 
+#[deprecated]
+#[derive(Resource, Clone, Default)]
+pub struct RenderSettings {
+    pub max_texture_size: u32,
+}
+
+#[deprecated]
 #[derive(Resource, Default)]
-pub struct GlobalInfiniteGridSettings {}
+pub struct GlobalInfiniteGridSettings {
+    pub render_settings: RenderSettings,
+}
 
 #[derive(Component, Default)]
 pub struct InfiniteGrid;
