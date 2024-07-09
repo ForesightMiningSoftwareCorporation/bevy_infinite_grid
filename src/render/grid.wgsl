@@ -108,7 +108,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let grid2 = abs(fract((coord * 0.1) - 0.5) - 0.5) / derivative2;
     let mg_line = min(grid2.x, grid2.y);
 
-    let grid_alpha = 1.0 - min(lne, 1.0);
+    let grid_alpha = max(1.0 - min(lne, 1.0), 0.0);
     let base_grid_color = mix(grid_settings.major_line_col, grid_settings.minor_line_col, step(1., mg_line));
     var grid_color = vec4(base_grid_color.rgb, base_grid_color.a * grid_alpha);
 
