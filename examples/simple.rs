@@ -19,6 +19,10 @@ fn setup_system(
     commands.spawn((
         Camera3dBundle {
             transform: Transform::from_xyz(0.0, 4.37, 14.77),
+            camera: Camera {
+                hdr: true,
+                ..default()
+            },
             ..default()
         },
         CameraController::default(),

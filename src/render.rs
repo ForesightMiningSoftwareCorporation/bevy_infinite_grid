@@ -332,7 +332,7 @@ fn prepare_infinite_grids(
 ) {
     position_uniforms.uniforms.clear();
     settings_uniforms.uniforms.clear();
-    for (entity, extracted) in grids.iter() {
+    for (entity, extracted) in &grids {
         let transform = extracted.transform;
         let t = transform.compute_transform();
         let offset = transform.translation();
@@ -350,7 +350,7 @@ fn prepare_infinite_grids(
         });
     }
 
-    for (entity, settings) in cameras.iter() {
+    for (entity, settings) in &cameras {
         commands
             .entity(entity)
             .insert(PerCameraSettingsUniformOffset {
