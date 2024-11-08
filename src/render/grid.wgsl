@@ -108,7 +108,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let grid2 = abs(fract((coord * 0.1) - 0.5) - 0.5) / derivative2;
     let mg_line = min(grid2.x, grid2.y);
 
-    let grid_alpha = 1.0 - min(lne, 1.0);
+    let grid_alpha = max(1.0 - min(lne, 1.0), 0.0);
     let base_grid_color = mix(grid_settings.major_line_col, grid_settings.minor_line_col, step(1., mg_line));
     var grid_color = vec4(base_grid_color.rgb, base_grid_color.a * grid_alpha);
 
@@ -118,7 +118,7 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     grid_color = mix(grid_color, vec4(grid_settings.z_axis_col, grid_color.a), f32(z_axis_cond));
     grid_color = mix(grid_color, vec4(grid_settings.x_axis_col, grid_color.a), f32(x_axis_cond));
 
-    let dist_fadeout = min(1., 1. - grid_settings.dist_fadeout_const * real_depth);
+    let dist_fadeout = min(1., 1. - min(grid_settings.dist_fadeout_const * real_depth, 1.));
     let dot_fadeout = abs(dot(grid_position.normal, normalize(view.world_position - frag_pos_3d)));
     let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * min(grid_settings.dot_fadeout_const * dot_fadeout, 1.);
 
