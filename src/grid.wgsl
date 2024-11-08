@@ -123,6 +123,10 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * min(grid_settings.dot_fadeout_const * dot_fadeout, 1.);
 
     grid_color.a = grid_color.a * alpha_fadeout;
+    // This can happen when using HDR
+    if grid_color.a < 0.0 {
+        grid_color.a = 0.0;
+    }
     out.color = grid_color;
 
     return out;
