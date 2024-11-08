@@ -331,6 +331,7 @@ fn prepare_infinite_grids(
     render_queue: Res<RenderQueue>,
 ) {
     position_uniforms.uniforms.clear();
+    settings_uniforms.uniforms.clear();
     for (entity, extracted) in grids.iter() {
         let transform = extracted.transform;
         let t = transform.compute_transform();
