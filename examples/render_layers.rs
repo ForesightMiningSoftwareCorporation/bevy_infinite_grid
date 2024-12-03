@@ -17,39 +17,36 @@ fn setup_system(
     commands.spawn((InfiniteGridBundle::default(), RenderLayers::layer(1)));
 
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, 4.37, 14.77),
+        Camera3d::default(),
+        Camera {
+            hdr: true,
             ..default()
         },
+        Transform::from_xyz(0.0, 4.37, 14.77),
         RenderLayers::layer(1),
     ));
 
-    commands.spawn(DirectionalLightBundle {
-        transform: Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.)
-            .looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-
-    let mat = standard_materials.add(StandardMaterial::default());
+    commands.spawn((
+        DirectionalLight {
+            ..default()
+        },
+        Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
 
     // cube
-    commands.spawn(PbrBundle {
-        material: mat.clone(),
-        mesh: meshes.add(Cuboid::from_size(Vec3::ONE).mesh()),
-        transform: Transform {
-            translation: Vec3::new(3., 4., 0.),
-            rotation: Quat::from_rotation_arc(Vec3::Y, Vec3::ONE.normalize()),
-            scale: Vec3::splat(1.5),
-        },
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        MeshMaterial3d(standard_materials.add(StandardMaterial::default())),
+        Transform::from_xyz(3.0, 4.0, 0.0)
+        .with_rotation(Quat::from_rotation_arc(Vec3::Y, Vec3::ONE.normalize()))
+        .with_scale(Vec3::splat(1.5)),
+    ));
 
-    commands.spawn(PbrBundle {
-        material: mat.clone(),
-        mesh: meshes.add(Cuboid::from_size(Vec3::ONE).mesh()),
-        transform: Transform::from_xyz(0.0, 2.0, 0.0),
-        ..default()
-    });
+    commands.spawn((
+        Mesh3d(meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+        MeshMaterial3d(standard_materials.add(StandardMaterial::default())),
+        Transform::from_xyz(0.0, 2.0, 0.0),
+    ));
 }
 
 fn toggle_layers(mut q: Query<&mut RenderLayers, With<Camera>>, input: Res<ButtonInput<KeyCode>>) {
