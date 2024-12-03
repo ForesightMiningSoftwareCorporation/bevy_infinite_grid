@@ -30,7 +30,6 @@ use bevy::{
         view::{ExtractedView, ViewTarget, RenderVisibleEntities},
         Extract, ExtractSchedule, Render, RenderApp, RenderSet,
         sync_world::RenderEntity,
-        extract_component::{ExtractComponent, ExtractComponentPlugin}
     },
     image::BevyDefault,
 };
@@ -51,7 +50,6 @@ pub fn render_app_builder(app: &mut App) {
         .init_resource::<GridDisplaySettingsUniforms>()
         .init_resource::<InfiniteGridPipeline>()
         .init_resource::<SpecializedRenderPipelines<InfiniteGridPipeline>>()
-        .add_plugins(ExtractComponentPlugin::<ExtractedInfiniteGrid>::default())
         .add_render_command::<Transparent3d, DrawInfiniteGrid>()
         .add_systems(
             ExtractSchedule,
@@ -73,7 +71,7 @@ pub fn render_app_builder(app: &mut App) {
         .add_systems(Render, queue_infinite_grids.in_set(RenderSet::Queue));
 }
 
-#[derive(Component, ExtractComponent, Clone)]
+#[derive(Component)]
 struct ExtractedInfiniteGrid {
     transform: GlobalTransform,
     grid: InfiniteGridSettings,
