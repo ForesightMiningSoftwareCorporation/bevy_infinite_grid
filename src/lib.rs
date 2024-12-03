@@ -59,5 +59,5 @@ pub struct InfiniteGridBundle {
     pub inherited_visibility: InheritedVisibility,
     pub shadow_casters: RenderVisibleEntities,
     pub no_frustum_culling: NoFrustumCulling,
-    pub sync_to_render_wordl: SyncToRenderWorld
+    pub sync_to_render_world: SyncToRenderWorld
 }
