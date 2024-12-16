@@ -1,7 +1,12 @@
 mod render;
 
-use bevy::prelude::*;
-use bevy::render::view::{check_visibility, NoFrustumCulling, VisibleEntities};
+use bevy::{
+    prelude::*,
+    render::{
+        view::{check_visibility, NoFrustumCulling, RenderVisibleEntities},
+        sync_world::SyncToRenderWorld,
+    }
+};
 
 pub struct InfiniteGridPlugin;
 
@@ -52,6 +57,7 @@ pub struct InfiniteGridBundle {
     pub visibility: Visibility,
     pub view_visibility: ViewVisibility,
     pub inherited_visibility: InheritedVisibility,
-    pub shadow_casters: VisibleEntities,
+    pub shadow_casters: RenderVisibleEntities,
     pub no_frustum_culling: NoFrustumCulling,
+    pub sync_to_render_world: SyncToRenderWorld
 }
