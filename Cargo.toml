@@ -1,6 +1,6 @@
 [package]
 name = "bevy_infinite_grid"
-version = "0.13.1"
+version = "0.14.0"
 authors = [
     "Nile <therawmeatball@gmail.com>",
     "Foresight Mining Software Corporation",
@@ -21,6 +21,8 @@ bevy = { version = "0.15.0", default-features = false, features = [
     "bevy_pbr",
     "bevy_asset",
 ] }
+# Temporary fix until this issue is resolved https://github.com/bevyengine/bevy/issues/16563
+bevy_internal = { version = "0.15", features = ["bevy_image"] }
 
 [dev-dependencies]
 bevy = { version = "0.15.0", default-features = false, features = [
