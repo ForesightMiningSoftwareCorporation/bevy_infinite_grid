@@ -101,32 +101,29 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
     let grid = abs(fract(coord - 0.5) - 0.5) / derivative;
     let lne = min(grid.x, grid.y);
 
-    let minimumz = min(derivative.y, 1.) / scale;
-    let minimumx = min(derivative.x, 1.) / scale;
-
     let derivative2 = fwidth(coord * 0.1);
     let grid2 = abs(fract((coord * 0.1) - 0.5) - 0.5) / derivative2;
     let mg_line = min(grid2.x, grid2.y);
 
-    let grid_alpha = 1.0 - min(lne, 1.0);
-    let base_grid_color = mix(grid_settings.major_line_col, grid_settings.minor_line_col, step(1., mg_line));
-    var grid_color = vec4(base_grid_color.rgb, base_grid_color.a * grid_alpha);
+    let grid3 = abs(coord) / derivative;
+    let axis_line = min(grid3.x, grid3.y);
 
-    let z_axis_cond = plane_coords.x > -1.0 * minimumx && plane_coords.x < 1.0 * minimumx;
-    let x_axis_cond = plane_coords.y > -1.0 * minimumz && plane_coords.y < 1.0 * minimumz;
-
-    grid_color = mix(grid_color, vec4(grid_settings.z_axis_col, grid_color.a), f32(z_axis_cond));
-    grid_color = mix(grid_color, vec4(grid_settings.x_axis_col, grid_color.a), f32(x_axis_cond));
+    var alpha = vec3(1.0) - min(vec3(axis_line, mg_line, lne), vec3(1.0));
+    alpha.y *= (1.0 - alpha.x) * grid_settings.major_line_col.a;
+    alpha.z *= (1.0 - (alpha.x + alpha.y)) * grid_settings.minor_line_col.a;
 
     let dist_fadeout = min(1., 1. - grid_settings.dist_fadeout_const * real_depth);
     let dot_fadeout = abs(dot(grid_position.normal, normalize(view.world_position - frag_pos_3d)));
     let alpha_fadeout = mix(dist_fadeout, 1., dot_fadeout) * min(grid_settings.dot_fadeout_const * dot_fadeout, 1.);
 
-    grid_color.a = grid_color.a * alpha_fadeout;
-    // This can happen when using HDR
-    if grid_color.a < 0.0 {
-        grid_color.a = 0.0;
-    }
+    let a_0 = alpha.x + alpha.y + alpha.z;
+    alpha /= a_0;
+    let axis_color = mix(grid_settings.x_axis_col, grid_settings.z_axis_col, step(grid3.x, grid3.y));
+    var grid_color = vec4(
+        axis_color * alpha.x + grid_settings.major_line_col.rgb * alpha.y + grid_settings.minor_line_col.rgb * alpha.z,
+        max(a_0 * alpha_fadeout, 0.0),
+    );
+
     out.color = grid_color;
 
     return out;
