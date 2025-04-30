@@ -118,12 +118,13 @@ fn fragment(in: VertexOutput) -> FragmentOutput {
 
     let a_0 = alpha.x + alpha.y + alpha.z;
     alpha /= a_0;
+    // On MacOS the line above could generate NaNs and render as black instead of transparent
+    alpha = clamp(alpha, vec3(0.0), vec3(1.0));
     let axis_color = mix(grid_settings.x_axis_col, grid_settings.z_axis_col, step(grid3.x, grid3.y));
     var grid_color = vec4(
         axis_color * alpha.x + grid_settings.major_line_col.rgb * alpha.y + grid_settings.minor_line_col.rgb * alpha.z,
         max(a_0 * alpha_fadeout, 0.0),
     );
-
     out.color = grid_color;
 
     return out;
