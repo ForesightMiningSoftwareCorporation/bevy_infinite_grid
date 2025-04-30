@@ -10,6 +10,7 @@ use bevy::{
             SystemParamItem,
         },
     },
+    image::BevyDefault,
     pbr::MeshPipelineKey,
     prelude::*,
     render::{
@@ -27,11 +28,10 @@ use bevy::{
             StencilFaceState, StencilState, TextureFormat, VertexState,
         },
         renderer::{RenderDevice, RenderQueue},
-        view::{ExtractedView, ViewTarget, RenderVisibleEntities},
-        Extract, ExtractSchedule, Render, RenderApp, RenderSet,
         sync_world::RenderEntity,
+        view::{ExtractedView, RenderVisibleEntities, ViewTarget},
+        Extract, ExtractSchedule, Render, RenderApp, RenderSet,
     },
-    image::BevyDefault,
 };
 
 use crate::InfiniteGridSettings;

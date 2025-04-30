@@ -3,9 +3,9 @@ mod render;
 use bevy::{
     prelude::*,
     render::{
-        view::{check_visibility, NoFrustumCulling, RenderVisibleEntities},
         sync_world::SyncToRenderWorld,
-    }
+        view::{check_visibility, NoFrustumCulling, RenderVisibleEntities},
+    },
 };
 
 pub struct InfiniteGridPlugin;
@@ -59,5 +59,6 @@ pub struct InfiniteGridBundle {
     pub inherited_visibility: InheritedVisibility,
     pub shadow_casters: RenderVisibleEntities,
     pub no_frustum_culling: NoFrustumCulling,
-    pub sync_to_render_world: SyncToRenderWorld
+    pub sync_to_render_world: SyncToRenderWorld,
 }
+
