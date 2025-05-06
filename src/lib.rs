@@ -4,16 +4,14 @@ use bevy::{
     prelude::*,
     render::{
         sync_world::SyncToRenderWorld,
-        view::{check_visibility, NoFrustumCulling, RenderVisibleEntities},
+        view::{self, NoFrustumCulling, RenderVisibleEntities, VisibilityClass},
     },
 };
 
 pub struct InfiniteGridPlugin;
 
 impl Plugin for InfiniteGridPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, check_visibility::<With<InfiniteGridSettings>>);
-    }
+    fn build(&self, _app: &mut App) {}
 
     fn finish(&self, app: &mut App) {
         render::render_app_builder(app);
@@ -24,6 +22,8 @@ impl Plugin for InfiniteGridPlugin {
 pub struct InfiniteGrid;
 
 #[derive(Component, Copy, Clone)]
+#[require(VisibilityClass)]
+#[component(on_add = view::add_visibility_class::<InfiniteGridSettings>)]
 pub struct InfiniteGridSettings {
     pub x_axis_color: Color,
     pub z_axis_color: Color,
@@ -61,4 +61,3 @@ pub struct InfiniteGridBundle {
     pub no_frustum_culling: NoFrustumCulling,
     pub sync_to_render_world: SyncToRenderWorld,
 }
-

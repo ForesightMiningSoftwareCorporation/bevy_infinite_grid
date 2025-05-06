@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use bevy::{
-    asset::load_internal_asset,
+    asset::{load_internal_asset, weak_handle},
     core_pipeline::core_3d::Transparent3d,
     ecs::{
         query::ROQueryItem,
@@ -36,7 +36,7 @@ use bevy::{
 
 use crate::InfiniteGridSettings;
 
-const GRID_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(15204473893972682982);
+const GRID_SHADER_HANDLE: Handle<Shader> = weak_handle!("01968ec1-1753-7731-9b47-b50296bcb86b");
 
 pub fn render_app_builder(app: &mut App) {
     load_internal_asset!(app, GRID_SHADER_HANDLE, "grid.wgsl", Shader::from_wgsl);
@@ -308,7 +308,7 @@ fn extract_infinite_grids(
             )
         })
         .collect();
-    commands.insert_or_spawn_batch(extracted);
+    commands.try_insert_batch(extracted);
 }
 
 fn extract_per_camera_settings(
@@ -319,7 +319,7 @@ fn extract_per_camera_settings(
         .iter()
         .map(|(entity, settings)| (entity, *settings))
         .collect();
-    commands.insert_or_spawn_batch(extracted);
+    commands.try_insert_batch(extracted);
 }
 
 fn prepare_infinite_grids(
@@ -401,15 +401,15 @@ fn queue_infinite_grids(
     mut pipelines: ResMut<SpecializedRenderPipelines<InfiniteGridPipeline>>,
     infinite_grids: Query<&ExtractedInfiniteGrid>,
     mut transparent_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
-    mut views: Query<(Entity, &RenderVisibleEntities, &ExtractedView, &Msaa), With<ExtractedView>>,
+    mut views: Query<(&ExtractedView, &RenderVisibleEntities, &Msaa)>,
 ) {
     let draw_function_id = transparent_draw_functions
         .read()
         .get_id::<DrawInfiniteGrid>()
         .unwrap();
 
-    for (view_entity, entities, view, msaa) in views.iter_mut() {
-        let Some(phase) = transparent_render_phases.get_mut(&view_entity) else {
+    for (view, entities, msaa) in views.iter_mut() {
+        let Some(phase) = transparent_render_phases.get_mut(&view.retained_view_entity) else {
             continue;
         };
 
@@ -422,7 +422,7 @@ fn queue_infinite_grids(
                 sample_count: msaa.samples(),
             },
         );
-        for &entity in entities.iter::<With<InfiniteGridSettings>>() {
+        for &entity in entities.iter::<InfiniteGridSettings>() {
             if !infinite_grids
                 .get(entity.0)
                 .map(|grid| plane_check(&grid.transform, view.world_from_view.translation()))
@@ -436,7 +436,8 @@ fn queue_infinite_grids(
                 draw_function: draw_function_id,
                 distance: f32::NEG_INFINITY,
                 batch_range: 0..1,
-                extra_index: PhaseItemExtraIndex::NONE,
+                extra_index: PhaseItemExtraIndex::None,
+                indexed: false,
             });
         }
     }
