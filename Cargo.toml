@@ -28,6 +28,7 @@ bevy = { version = "0.16.0", default-features = false, features = [
 bevy = { version = "0.16.0", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
+  "bevy_sprite",
   "x11",
   "tonemapping_luts",
   "ktx2",
