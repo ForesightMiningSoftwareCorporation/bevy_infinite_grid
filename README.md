@@ -23,8 +23,8 @@ cargo run --example simple
 
 # Features
 
-* Easily spawn an infinite grid aligned to the world origin and axes
-* Spawn an unlimited number of axes aligned to arbitrary coordinate spaces
+- Easily spawn an infinite grid aligned to the world origin and axes
+- Spawn an unlimited number of axes aligned to arbitrary coordinate spaces
 
 # Usage
 
@@ -56,6 +56,7 @@ We intend to track the `main` branch of Bevy. PRs supporting this are welcome!
 
 | bevy | bevy_infinite_grid |
 | ---- | ------------------ |
+| 0.17 | 0.16               |
 | 0.16 | 0.15               |
 | 0.15 | 0.14               |
 | 0.14 | 0.13               |
@@ -67,8 +68,8 @@ We intend to track the `main` branch of Bevy. PRs supporting this are welcome!
 
 bevy_infinite_grid is free and open source! All code in this repository is dual-licensed under either:
 
-* MIT License ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
-* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or [http://opensource.org/licenses/MIT](http://opensource.org/licenses/MIT))
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0))
 
 at your option. This means you can select the license you prefer! This dual-licensing approach is the de-facto standard in the Rust ecosystem and there are very good reasons to include both.
 
