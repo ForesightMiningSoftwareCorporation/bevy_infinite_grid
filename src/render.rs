@@ -6,6 +6,7 @@ use bevy::{
     ecs::{
         query::ROQueryItem,
         system::SystemParamItem,
+        system::lifetimeless::{Read, SRes},
     },
     image::BevyDefault,
     pbr::MeshPipelineKey,
@@ -161,7 +162,7 @@ struct SetGridViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridViewBindGroup<I> {
     type Param = ();
-    type ViewQuery = (&'static GridViewUniformOffset, &'static GridViewBindGroup);
+    type ViewQuery = (Read<GridViewUniformOffset>, Read<GridViewBindGroup>);
     type ItemQuery = ();
 
     #[inline]
@@ -180,9 +181,9 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetGridViewBindGroup<I> 
 struct SetInfiniteGridBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetInfiniteGridBindGroup<I> {
-    type Param = Res<'static, InfiniteGridBindGroup>;
-    type ViewQuery = Option<&'static PerCameraSettingsUniformOffset>;
-    type ItemQuery = &'static InfiniteGridUniformOffsets;
+    type Param = SRes<InfiniteGridBindGroup>;
+    type ViewQuery = Option<Read<PerCameraSettingsUniformOffset>>;
+    type ItemQuery = Read<InfiniteGridUniformOffsets>;
 
     #[inline]
     fn render<'w>(
