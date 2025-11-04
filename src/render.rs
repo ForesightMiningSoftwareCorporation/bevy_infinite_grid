@@ -5,8 +5,8 @@ use bevy::{
     core_pipeline::core_3d::Transparent3d,
     ecs::{
         query::ROQueryItem,
-        system::SystemParamItem,
         system::lifetimeless::{Read, SRes},
+        system::SystemParamItem,
     },
     image::BevyDefault,
     pbr::MeshPipelineKey,

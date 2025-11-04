@@ -3,10 +3,7 @@ mod render;
 use bevy::{
     camera::visibility::{self, NoFrustumCulling, VisibilityClass},
     prelude::*,
-    render::{
-        sync_world::SyncToRenderWorld,
-        view::RenderVisibleEntities,
-    },
+    render::{sync_world::SyncToRenderWorld, view::RenderVisibleEntities},
 };
 
 pub struct InfiniteGridPlugin;
