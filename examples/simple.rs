@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, render::view::Hdr};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 use camera_controller::{CameraController, CameraControllerPlugin};
 
@@ -18,10 +18,7 @@ fn setup_system(
 
     commands.spawn((
         Camera3d::default(),
-        Camera {
-            hdr: true,
-            ..default()
-        },
+        Hdr,
         Transform::from_xyz(0.0, 4.37, 14.77),
         CameraController::default(),
     ));
@@ -88,7 +85,7 @@ mod camera_controller {
 
     fn camera_controller(
         time: Res<Time>,
-        mut mouse_events: EventReader<MouseMotion>,
+        mut mouse_events: MessageReader<MouseMotion>,
         mouse_button_input: Res<ButtonInput<MouseButton>>,
         key_input: Res<ButtonInput<KeyCode>>,
         mut query: Query<(&mut Transform, &mut CameraController), With<Camera>>,

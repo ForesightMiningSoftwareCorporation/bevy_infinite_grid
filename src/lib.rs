@@ -1,11 +1,9 @@
 mod render;
 
 use bevy::{
+    camera::visibility::{self, NoFrustumCulling, VisibilityClass},
     prelude::*,
-    render::{
-        sync_world::SyncToRenderWorld,
-        view::{self, NoFrustumCulling, RenderVisibleEntities, VisibilityClass},
-    },
+    render::{sync_world::SyncToRenderWorld, view::RenderVisibleEntities},
 };
 
 pub struct InfiniteGridPlugin;
@@ -23,7 +21,7 @@ pub struct InfiniteGrid;
 
 #[derive(Component, Copy, Clone)]
 #[require(VisibilityClass)]
-#[component(on_add = view::add_visibility_class::<InfiniteGridSettings>)]
+#[component(on_add = visibility::add_visibility_class::<InfiniteGridSettings>)]
 pub struct InfiniteGridSettings {
     pub x_axis_color: Color,
     pub z_axis_color: Color,

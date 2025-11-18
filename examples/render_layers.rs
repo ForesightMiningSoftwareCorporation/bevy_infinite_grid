@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::view::RenderLayers};
+use bevy::{camera::visibility::RenderLayers, prelude::*, render::view::Hdr};
 use bevy_infinite_grid::{InfiniteGridBundle, InfiniteGridPlugin};
 
 fn main() {
@@ -18,10 +18,7 @@ fn setup_system(
 
     commands.spawn((
         Camera3d::default(),
-        Camera {
-            hdr: true,
-            ..default()
-        },
+        Hdr,
         Transform::from_xyz(0.0, 4.37, 14.77),
         RenderLayers::layer(1),
     ));
