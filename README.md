@@ -56,7 +56,7 @@ We intend to track the `main` branch of Bevy. PRs supporting this are welcome!
 
 | bevy | bevy_infinite_grid |
 | ---- | ------------------ |
-| 0.17 | 0.16               |
+| 0.17 | 0.17               |
 | 0.16 | 0.15               |
 | 0.15 | 0.14               |
 | 0.14 | 0.13               |
