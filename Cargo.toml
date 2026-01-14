@@ -1,6 +1,6 @@
 [package]
 name = "bevy_infinite_grid"
-version = "0.17.0"
+version = "0.18.0"
 authors = [
   "Nile <therawmeatball@gmail.com>",
   "Foresight Mining Software Corporation",
@@ -15,7 +15,7 @@ keywords = ["bevy"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18", default-features = false, features = [
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_pbr",
@@ -25,7 +25,7 @@ bevy = { version = "0.17", default-features = false, features = [
 ] }
 
 [dev-dependencies]
-bevy = { version = "0.17", default-features = false, features = [
+bevy = { version = "0.18", default-features = false, features = [
   "bevy_winit",
   "bevy_window",
   "x11",
