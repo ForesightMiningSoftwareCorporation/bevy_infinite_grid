@@ -18,7 +18,7 @@ use bevy::{
         },
         render_resource::PrimitiveTopology,
         render_resource::{
-            binding_types::uniform_buffer, BindGroup, BindGroupEntries, BindGroupLayout,
+            binding_types::uniform_buffer, BindGroup, BindGroupEntries, BindGroupLayoutDescriptor,
             BindGroupLayoutEntries, BlendState, ColorTargetState, ColorWrites, CompareFunction,
             DepthBiasState, DepthStencilState, DynamicUniformBuffer, FragmentState,
             MultisampleState, PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor,
@@ -264,13 +264,14 @@ fn prepare_grid_view_bind_groups(
     render_device: Res<RenderDevice>,
     uniforms: Res<GridViewUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
+    pipeline_cache: Res<PipelineCache>,
     views: Query<Entity, With<GridViewUniformOffset>>,
 ) {
     if let Some(binding) = uniforms.uniforms.binding() {
         for entity in views.iter() {
             let bind_group = render_device.create_bind_group(
                 "grid-view-bind-group",
-                &pipeline.view_layout,
+                &pipeline_cache.get_bind_group_layout(&pipeline.view_layout),
                 &BindGroupEntries::single(binding.clone()),
             );
             commands
@@ -373,6 +374,7 @@ fn prepare_bind_groups_for_infinite_grids(
     position_uniforms: Res<InfiniteGridUniforms>,
     settings_uniforms: Res<GridDisplaySettingsUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
+    pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
 ) {
     let Some((position_binding, settings_binding)) = position_uniforms
@@ -385,7 +387,7 @@ fn prepare_bind_groups_for_infinite_grids(
 
     let bind_group = render_device.create_bind_group(
         "infinite-grid-bind-group",
-        &pipeline.infinite_grid_layout,
+        &pipeline_cache.get_bind_group_layout(&pipeline.infinite_grid_layout),
         &BindGroupEntries::sequential((position_binding.clone(), settings_binding.clone())),
     );
     commands.insert_resource(InfiniteGridBindGroup { value: bind_group });
@@ -454,21 +456,20 @@ type DrawInfiniteGrid = (
 
 #[derive(Resource)]
 struct InfiniteGridPipeline {
-    view_layout: BindGroupLayout,
-    infinite_grid_layout: BindGroupLayout,
+    view_layout: BindGroupLayoutDescriptor,
+    infinite_grid_layout: BindGroupLayoutDescriptor,
 }
 
 impl FromWorld for InfiniteGridPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let view_layout = render_device.create_bind_group_layout(
+    fn from_world(_world: &mut World) -> Self {
+        let view_layout = BindGroupLayoutDescriptor::new(
             "grid-view-bind-group-layout",
             &BindGroupLayoutEntries::single(
                 ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 uniform_buffer::<GridViewUniform>(true),
             ),
         );
-        let infinite_grid_layout = render_device.create_bind_group_layout(
+        let infinite_grid_layout = BindGroupLayoutDescriptor::new(
             "infinite-grid-bind-group-layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
