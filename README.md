@@ -55,7 +55,8 @@ See the [simple](examples/simple.rs) demo for an example of a minimal implementa
 We intend to track the `main` branch of Bevy. PRs supporting this are welcome!
 
 | bevy | bevy_infinite_grid |
-| ---- | ------------------ |
+|------|--------------------|
+| 0.18 | 0.18               |
 | 0.17 | 0.17               |
 | 0.16 | 0.15               |
 | 0.15 | 0.14               |
