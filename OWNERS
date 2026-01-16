@@ -2,3 +2,4 @@ filters:
   ".*":
     approvers:
     - IceSentry
+    - salixsalicaceae
