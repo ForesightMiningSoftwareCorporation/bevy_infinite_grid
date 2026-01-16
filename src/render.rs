@@ -5,30 +5,32 @@ use bevy::{
     core_pipeline::core_3d::Transparent3d,
     ecs::{
         query::ROQueryItem,
-        system::lifetimeless::{Read, SRes},
-        system::SystemParamItem,
+        system::{
+            SystemParamItem,
+            lifetimeless::{Read, SRes},
+        },
     },
     image::BevyDefault,
     pbr::MeshPipelineKey,
     prelude::*,
     render::{
+        Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
         render_phase::{
             AddRenderCommand, DrawFunctions, PhaseItem, PhaseItemExtraIndex, RenderCommand,
             RenderCommandResult, SetItemPipeline, ViewSortedRenderPhases,
         },
-        render_resource::PrimitiveTopology,
         render_resource::{
-            binding_types::uniform_buffer, BindGroup, BindGroupEntries, BindGroupLayout,
+            BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor,
             BindGroupLayoutEntries, BlendState, ColorTargetState, ColorWrites, CompareFunction,
             DepthBiasState, DepthStencilState, DynamicUniformBuffer, FragmentState,
-            MultisampleState, PipelineCache, PolygonMode, PrimitiveState, RenderPipelineDescriptor,
-            ShaderStages, ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines,
-            StencilFaceState, StencilState, TextureFormat, VertexState,
+            MultisampleState, PipelineCache, PolygonMode, PrimitiveState, PrimitiveTopology,
+            RenderPipelineDescriptor, ShaderStages, ShaderType, SpecializedRenderPipeline,
+            SpecializedRenderPipelines, StencilFaceState, StencilState, TextureFormat, VertexState,
+            binding_types::uniform_buffer,
         },
         renderer::{RenderDevice, RenderQueue},
         sync_world::RenderEntity,
         view::{ExtractedView, RenderVisibleEntities, ViewTarget},
-        Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
     },
 };
 
@@ -261,6 +263,7 @@ fn prepare_grid_view_uniforms(
 
 fn prepare_grid_view_bind_groups(
     mut commands: Commands,
+    pipeline_cache: Res<PipelineCache>,
     render_device: Res<RenderDevice>,
     uniforms: Res<GridViewUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
@@ -270,7 +273,7 @@ fn prepare_grid_view_bind_groups(
         for entity in views.iter() {
             let bind_group = render_device.create_bind_group(
                 "grid-view-bind-group",
-                &pipeline.view_layout,
+                &pipeline_cache.get_bind_group_layout(&pipeline.view_layout),
                 &BindGroupEntries::single(binding.clone()),
             );
             commands
@@ -370,6 +373,7 @@ fn prepare_infinite_grids(
 
 fn prepare_bind_groups_for_infinite_grids(
     mut commands: Commands,
+    pipeline_cache: Res<PipelineCache>,
     position_uniforms: Res<InfiniteGridUniforms>,
     settings_uniforms: Res<GridDisplaySettingsUniforms>,
     pipeline: Res<InfiniteGridPipeline>,
@@ -385,7 +389,7 @@ fn prepare_bind_groups_for_infinite_grids(
 
     let bind_group = render_device.create_bind_group(
         "infinite-grid-bind-group",
-        &pipeline.infinite_grid_layout,
+        &pipeline_cache.get_bind_group_layout(&pipeline.infinite_grid_layout),
         &BindGroupEntries::sequential((position_binding.clone(), settings_binding.clone())),
     );
     commands.insert_resource(InfiniteGridBindGroup { value: bind_group });
@@ -454,21 +458,20 @@ type DrawInfiniteGrid = (
 
 #[derive(Resource)]
 struct InfiniteGridPipeline {
-    view_layout: BindGroupLayout,
-    infinite_grid_layout: BindGroupLayout,
+    view_layout: BindGroupLayoutDescriptor,
+    infinite_grid_layout: BindGroupLayoutDescriptor,
 }
 
 impl FromWorld for InfiniteGridPipeline {
     fn from_world(world: &mut World) -> Self {
-        let render_device = world.resource::<RenderDevice>();
-        let view_layout = render_device.create_bind_group_layout(
+        let view_layout = BindGroupLayoutDescriptor::new(
             "grid-view-bind-group-layout",
             &BindGroupLayoutEntries::single(
                 ShaderStages::VERTEX | ShaderStages::FRAGMENT,
                 uniform_buffer::<GridViewUniform>(true),
             ),
         );
-        let infinite_grid_layout = render_device.create_bind_group_layout(
+        let infinite_grid_layout = BindGroupLayoutDescriptor::new(
             "infinite-grid-bind-group-layout",
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::FRAGMENT,
