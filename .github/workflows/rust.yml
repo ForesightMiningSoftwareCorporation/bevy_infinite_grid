@@ -1,8 +1,9 @@
 name: Rust
 
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch: # Thêm dòng này để bấm nút chạy thủ công
+#  push:
+#    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -12,15 +13,22 @@ env:
 jobs:
   build:
 
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies (For Bevy)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y g++ pkg-config libx11-dev libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+#      - name: Install dependencies (For Bevy)
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y g++ pkg-config libx11-dev libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+      - name: Rust Cache
+        uses: swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --release --example simple
       - name: Run tests
         run: cargo test --verbose
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple.exe
+          path: target/release/example/simple.exe
