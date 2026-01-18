@@ -43,9 +43,7 @@ Insert the infinite grid plugin after the default plugins.
 And spawn the grid to see the results.
 
 ```rust
-commands.spawn(InfiniteGridBundle::new(
-    materials.add(InfiniteGridMaterial::default()),
-));
+commands.spawn(InfiniteGridBundle::default());
 ```
 
 See the [simple](examples/simple.rs) demo for an example of a minimal implementation.
